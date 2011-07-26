@@ -1,0 +1,12 @@
+Package: com.ashman.lockinfotwitter
+Name: Twitter Plugin for LockInfo (Native)
+Version: 3.0.1.0
+Architecture: iphoneos-arm
+Description: Adds a native plugin for Twitter to your LockInfo screen.
+Homepage: http://modmyi.com/info/lockinfotwitter.php
+Depiction: http://modmyi.com/info/lockinfotwitter.d.php
+Maintainer: poetic_folly <poetic_folly@modmyi.com>
+Author: David Ashman (Stimpy5050) <dashman@gmail.com>
+Sponsor: ModMyi.com <http://modmyi.com/forums/index.php?styleid=31>
+Section: LockInfo Addons
+Pre-Depends: com.ashman.lockinfo (>= 3.0.0.0)

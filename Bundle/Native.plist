@@ -1,0 +1,137 @@
+<plist>
+<dict>
+	<key>items</key>
+        <array>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>footerText</key>
+			<string>Changes take effect on the next refresh.</string>
+		</dict>
+		<dict>
+                        <key>cell</key>
+                        <string>PSSwitchCell</string>
+                        <key>default</key>
+                        <true/>
+                        <key>defaults</key>
+                        <string>com.ashman.lockinfo.TwitterPlugin</string>
+                        <key>key</key>
+                        <string>ShowFriends</string>
+                        <key>label</key>
+                        <string>Show Friends</string>
+                </dict>
+		<dict>
+                        <key>cell</key>
+                        <string>PSSwitchCell</string>
+                        <key>default</key>
+                        <true/>
+                        <key>defaults</key>
+                        <string>com.ashman.lockinfo.TwitterPlugin</string>
+                        <key>key</key>
+                        <string>ShowMentions</string>
+                        <key>label</key>
+                        <string>Show Mentions</string>
+                </dict>
+		<dict>
+                        <key>cell</key>
+                        <string>PSSwitchCell</string>
+                        <key>default</key>
+                        <true/>
+                        <key>defaults</key>
+                        <string>com.ashman.lockinfo.TwitterPlugin</string>
+                        <key>key</key>
+                        <string>ShowDirectMessages</string>
+                        <key>label</key>
+                        <string>Show Direct Messages</string>
+                </dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+			<key>isStaticText</key>
+			<true/>
+			<key>requiredCapabilities</key>
+			<array>
+                                <dict><key>wildcat</key><false/></dict>
+                                <dict><key>multitasking</key><false/></dict>
+                        </array>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSTitleValueCell</string>
+			<key>label</key>
+			<string>Changes take effect on the next refresh.</string>
+			<key>requiredCapabilities</key>
+			<array>
+                                <dict><key>wildcat</key><false/></dict>
+                                <dict><key>multitasking</key><false/></dict>
+                        </array>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSGroupCell</string>
+		</dict>
+		<dict>
+                        <key>cell</key>
+                        <string>PSSwitchCell</string>
+                        <key>default</key>
+                        <true/>
+                        <key>defaults</key>
+                        <string>com.ashman.lockinfo.TwitterPlugin</string>
+                        <key>key</key>
+                        <string>NewTweets</string>
+                        <key>label</key>
+                        <string>Allow New Tweets</string>
+                </dict>
+		<dict>
+                        <key>cell</key>
+                        <string>PSSwitchCell</string>
+                        <key>default</key>
+                        <true/>
+                        <key>defaults</key>
+                        <string>com.ashman.lockinfo.TwitterPlugin</string>
+                        <key>key</key>
+                        <string>Replies</string>
+                        <key>label</key>
+                        <string>Allow Replies</string>
+                </dict>
+		<dict>
+                        <key>cell</key>
+                        <string>PSSwitchCell</string>
+                        <key>default</key>
+                        <false/>
+                        <key>defaults</key>
+                        <string>com.ashman.lockinfo.TwitterPlugin</string>
+                        <key>key</key>
+                        <string>Collapsed</string>
+                        <key>label</key>
+                        <string>Collapsed on Respring</string>
+                </dict>
+		<dict>
+                        <key>cell</key>
+                        <string>PSSwitchCell</string>
+                        <key>default</key>
+                        <true/>
+                        <key>defaults</key>
+                        <string>com.ashman.lockinfo.TwitterPlugin</string>
+                        <key>key</key>
+                        <string>ShowCount</string>
+                        <key>label</key>
+                        <string>Show Count</string>
+                </dict>
+		<dict>
+                        <key>cell</key>
+                        <string>PSSwitchCell</string>
+                        <key>default</key>
+                        <false/>
+                        <key>defaults</key>
+                        <string>com.ashman.lockinfo.TwitterPlugin</string>
+                        <key>key</key>
+                        <string>UseScreenNames</string>
+                        <key>label</key>
+                        <string>Use Screen Names</string>
+                </dict>
+        </array>
+	<key>title</key>
+        <string>Mail</string>
+</dict>
+</plist>
