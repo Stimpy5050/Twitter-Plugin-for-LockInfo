@@ -85,6 +85,8 @@
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
+			<key>footerText</key>
+			<string>Disable RT (Share) to retweet using Twitter's new Retweet system.</string>
 		</dict>
 		<dict>
 			<key>cell</key>
@@ -145,6 +147,18 @@
 			<string>UseScreenNames</string>
 			<key>label</key>
 			<string>Use Screen Names</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>default</key>
+			<false/>
+			<key>defaults</key>
+			<string>com.ashman.lockinfo.TwitterPlugin</string>
+			<key>key</key>
+			<string>UseOldRT</string>
+			<key>label</key>
+			<string>Use RT for retweet</string>
 		</dict>
 	</array>
 	<key>title</key>

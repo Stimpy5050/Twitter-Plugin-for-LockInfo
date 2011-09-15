@@ -24,7 +24,7 @@
 Class $SBTelephonyManager = objc_getClass("SBTelephonyManager");
 
 #define Hook(cls, sel, imp) \
-        _ ## imp = MSHookMessage($ ## cls, @selector(sel), &$ ## imp)
+_ ## imp = MSHookMessage($ ## cls, @selector(sel), &$ ## imp)
 
 @interface TwitterAuthController : PSDetailController <UIWebViewDelegate, UIAlertViewDelegate>
 
@@ -42,18 +42,18 @@ Class $SBTelephonyManager = objc_getClass("SBTelephonyManager");
 - (void) loadURL:(NSURL*) url
 {
 	self.activity = [[[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleWhite] autorelease];
-
+    
 	UIView* view = [self view];
 	view.autoresizingMask = (UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight);
 	view.autoresizesSubviews = YES;
-
+    
 	self.webView = [[UIWebView alloc] initWithFrame:view.bounds];
 	self.webView.autoresizesSubviews = YES;
 	self.webView.autoresizingMask=(UIViewAutoresizingFlexibleHeight | UIViewAutoresizingFlexibleWidth);
 	self.webView.scalesPageToFit = YES;
 	self.webView.delegate = self;
 	[view addSubview:self.webView];
-
+    
 	[self.webView loadRequest:[NSURLRequest requestWithURL:url]];
 }
 
@@ -100,7 +100,7 @@ Class $SBTelephonyManager = objc_getClass("SBTelephonyManager");
 	[self.activity startAnimating];
 	UIBarButtonItem* button = [[[UIBarButtonItem alloc] initWithCustomView:v] autorelease];
 	[self setBarButton:button];
-
+    
 	UIApplication* app = [UIApplication sharedApplication];
 	app.networkActivityIndicatorVisible = YES;
 }
@@ -113,15 +113,15 @@ Class $SBTelephonyManager = objc_getClass("SBTelephonyManager");
 			NSLog(@"LI:Twitter: Authorized!");
 		else
 			NSLog(@"LI:Twitter: Authorization failed!");
-
+        
 		if ([self.rootController respondsToSelector:@selector(popControllerWithAnimation:)])
-                	[self.rootController popControllerWithAnimation:YES];
+            [self.rootController popControllerWithAnimation:YES];
 		else
-                	[self.rootController popViewControllerAnimated:YES];
-
+            [self.rootController popViewControllerAnimated:YES];
+        
 		return NO;
 	}
-
+    
 	[self startLoad:webView];
 	return YES;
 }
@@ -130,7 +130,7 @@ Class $SBTelephonyManager = objc_getClass("SBTelephonyManager");
 {
 	[self.activity stopAnimating];
 	[self setBarButton:[[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemRefresh target:wv action:@selector(reload)] autorelease]];
-
+    
 	UIApplication* app = [UIApplication sharedApplication];
 	app.networkActivityIndicatorVisible = NO;
 }
@@ -152,27 +152,27 @@ Class $SBTelephonyManager = objc_getClass("SBTelephonyManager");
 extern "C" CFStringRef UIDateFormatStringForFormatType(CFStringRef type);
 
 #define localize(str) \
-        [self.plugin.bundle localizedStringForKey:str value:str table:nil]
+[self.plugin.bundle localizedStringForKey:str value:str table:nil]
 
 #define localizeSpec(str) \
-        [self.bundle localizedStringForKey:str value:str table:nil]
+[self.bundle localizedStringForKey:str value:str table:nil]
 
 #define localizeGlobal(str) \
-        [self.plugin.globalBundle localizedStringForKey:str value:str table:nil]
+[self.plugin.globalBundle localizedStringForKey:str value:str table:nil]
 
 static NSString* TWITTER_SERVICE = @"com.ashman.lockinfo.TwitterPlugin";
 
 static NSInteger sortByDate(id obj1, id obj2, void* context)
 {
-        double d1 = [[obj1 objectForKey:@"date"] doubleValue];
-        double d2 = [[obj2 objectForKey:@"date"] doubleValue];
-
-        if (d1 < d2)
-                return NSOrderedDescending;
-        else if (d1 > d2)
-                return NSOrderedAscending;
-        else
-                return NSOrderedSame;
+    double d1 = [[obj1 objectForKey:@"date"] doubleValue];
+    double d2 = [[obj2 objectForKey:@"date"] doubleValue];
+    
+    if (d1 < d2)
+        return NSOrderedDescending;
+    else if (d1 > d2)
+        return NSOrderedAscending;
+    else
+        return NSOrderedSame;
 }
 
 
@@ -202,29 +202,29 @@ static UIImage* directMessageIcon;
 -(void) drawRect:(CGRect) rect
 {
 	CGRect r = self.superview.bounds;
-
+    
 	NSString* name = self.name;
-        CGSize nameSize = [name sizeWithFont:self.theme.summaryStyle.font];
+    CGSize nameSize = [name sizeWithFont:self.theme.summaryStyle.font];
 	CGRect imageRect = CGRectMake(5, 5, (int)(nameSize.height * 1.4), (int)(nameSize.height * 1.4));
-
+    
 	NSString* padding = stringPaddingWithFont(self.theme.detailStyle.font, imageRect.origin.x + imageRect.size.width + 4);
 	CGSize paddingSize = [padding sizeWithFont:self.theme.detailStyle.font];
-
+    
 	NSString* text = [padding stringByAppendingString:self.tweet];
-
+    
 	[name drawInRect:CGRectMake(5 + paddingSize.width, 0, nameSize.width, nameSize.height) withLIStyle:self.theme.summaryStyle lineBreakMode:UILineBreakModeTailTruncation];
-
+    
 	LIStyle* timeStyle = [self.theme.detailStyle copy];
 	timeStyle.font = [UIFont systemFontOfSize:self.theme.detailStyle.font.pointSize];
 	CGSize timeSize = [self.time sizeWithFont:timeStyle.font];
 	[self.time drawInRect:CGRectMake(r.size.width - timeSize.width - 5, nameSize.height - timeSize.height, timeSize.width, timeSize.height) withLIStyle:timeStyle lineBreakMode:UILineBreakModeClip alignment:UITextAlignmentRight];
 	[timeStyle release];
-
-        CGSize s = [text sizeWithFont:self.theme.detailStyle.font constrainedToSize:CGSizeMake(r.size.width - 10, 4000) lineBreakMode:UILineBreakModeWordWrap];
+    
+    CGSize s = [text sizeWithFont:self.theme.detailStyle.font constrainedToSize:CGSizeMake(r.size.width - 10, 4000) lineBreakMode:UILineBreakModeWordWrap];
 	[text drawInRect:CGRectMake(5, nameSize.height, s.width, s.height) withLIStyle:self.theme.detailStyle lineBreakMode:UILineBreakModeWordWrap];
-
+    
 	[self.image drawInRoundedRect:imageRect withRadius:3];
-
+    
 	if (self.directMessage)
 	{
 		CGRect iconRect = CGRectMake(imageRect.origin.x + imageRect.size.width + 3 - directMessageIcon.size.width, imageRect.origin.y + imageRect.size.height + 3 - directMessageIcon.size.height, directMessageIcon.size.width, directMessageIcon.size.height);
@@ -300,27 +300,26 @@ static UITextView* previewTextView;
 	self.countLabel.text = [[NSNumber numberWithInt:count] stringValue];
 }
 /*
-- (BOOL)textViewShouldBeginEditing:(UITextView *)textView{
-    return YES;
-}
-*/
+ - (BOOL)textViewShouldBeginEditing:(UITextView *)textView{
+ return YES;
+ }
+ */
 
 -(void) showKeyboard
 {
 	if (Class peripheral = objc_getClass("UIPeripheralHost"))
-        {
-                [[peripheral sharedInstance] setAutomaticAppearanceEnabled:YES];
-                [[peripheral sharedInstance] orderInAutomatic];
-        }
-        else
-        {
-                [[UIKeyboard automaticKeyboard] orderInWithAnimation:YES];
-        }
+    {
+        [[peripheral sharedInstance] setAutomaticAppearanceEnabled:YES];
+        [[peripheral sharedInstance] orderInAutomatic];
+    }
+    else
+    {
+        [[UIKeyboard automaticKeyboard] orderInWithAnimation:YES];
+    }
 }
 
 -(void) previewDidShow:(LIPreview*) preview
 {
-    self.previewTextView.userInteractionEnabled = YES;
     if(WRITE_MODE){
         [self switchToWriteView];
     }
@@ -331,20 +330,20 @@ static UITextView* previewTextView;
 
 -(void) hideKeyboard
 {
-        if (Class peripheral = objc_getClass("UIPeripheralHost"))
-        {
-                [[peripheral sharedInstance] orderOutAutomatic];
-                [[peripheral sharedInstance] setAutomaticAppearanceEnabled:NO];
-        }
-        else
-        {
-                [[UIKeyboard automaticKeyboard] orderOutWithAnimation:YES];
-        }
+    if (Class peripheral = objc_getClass("UIPeripheralHost"))
+    {
+        [[peripheral sharedInstance] orderOutAutomatic];
+        [[peripheral sharedInstance] setAutomaticAppearanceEnabled:NO];
+    }
+    else
+    {
+        [[UIKeyboard automaticKeyboard] orderOutWithAnimation:YES];
+    }
 }
 
 -(void) previewWillDismiss:(LIPreview*) preview
 {
-        previewTextView = nil;
+    previewTextView = nil;
 	[self hideKeyboard];
 }
 
@@ -360,6 +359,7 @@ static UITextView* previewTextView;
 	UITextView* tv = [[[UITextView alloc] initWithFrame:v.bounds] autorelease];
 	tv.backgroundColor = [UIColor blackColor];
 	tv.editable = YES;
+    tv.userInteractionEnabled = YES;
 	tv.keyboardAppearance = UIKeyboardAppearanceAlert;
 	tv.font = [UIFont systemFontOfSize:20];
 	tv.textColor = [UIColor whiteColor];
@@ -505,14 +505,14 @@ static UITextView* previewTextView;
     WRITE_MODE = YES;
     [self.view sendSubviewToBack:self.readView];
     [self.view bringSubviewToFront:self.editView];
-    [self.previewTextView becomeFirstResponder];
 	[self showKeyboard];
+    [self.previewTextView becomeFirstResponder];//!TODO Needs some more fix. Keyboard apepars but focus is not in textView. Need to touch it explicitely to see cursor.
 }
 
 - (BOOL) keyboardInputShouldDelete:(UITextView*)input
 {
 	[self setCount:140 - input.text.length];
-       	return YES;
+    return YES;
 }
 
 -(void) sendTweet:(NSString*) tweet
@@ -534,13 +534,25 @@ static UITextView* previewTextView;
 {
 	NSAutoreleasePool* pool = [[NSAutoreleasePool alloc] init];
     
-	NSString* url = @"https://api.twitter.com/1/statuses/update.xml";
+    BOOL isDM = ([self.previewTweet objectForKey:@"directMessage"] != nil);
+    NSString* url = @"https://api.twitter.com/1/statuses/update.xml";
+    NSMutableDictionary* params = nil;    
+    if(isDM)
+    {
+        url = @"https://api.twitter.com/1/direct_messages/new.xml";
+        params = [NSMutableDictionary dictionaryWithObjectsAndKeys:tweet, @"text", nil];
+        NSString* name = [self.previewTweet objectForKey:@"screenName"];
+        [params setValue:name forKey:@"screen_name"];
+    }
+    else
+    {
+        params = [NSMutableDictionary dictionaryWithObjectsAndKeys:tweet, @"status", nil];
+        if (NSString* id = [self.previewTweet objectForKey:@"id"])
+            [params setValue:id forKey:@"in_reply_to_status_id"];
+        
+    }
     
-	NSMutableDictionary* params = [NSMutableDictionary dictionaryWithObjectsAndKeys:tweet, @"status", nil];
-	if (NSString* id = [self.previewTweet objectForKey:@"id"])
-		[params setValue:id forKey:@"in_reply_to_status_id"];
-    
-	NSMutableArray* paramArray = [NSMutableArray arrayWithCapacity:params.count];
+    NSMutableArray* paramArray = [NSMutableArray arrayWithCapacity:params.count];
 	for (id key in params)
 		[paramArray addObject:[NSString stringWithFormat:@"%@=%@", [key encodedURLParameterString], [[params objectForKey:key] encodedURLParameterString]]];
 	NSString* qs = [paramArray componentsJoinedByString:@"&"];
@@ -566,6 +578,8 @@ static UITextView* previewTextView;
 -(void) dismissTweet
 {
     [self.previewTextView resignFirstResponder];
+    previewTextView = nil;
+    [self hideKeyboard]; //!TODO Remove later. Need to hide k/b on tweet dismiss (hide from previewWillDismiss not working)
 	[self.plugin dismissPreview];
 }
 
@@ -578,9 +592,10 @@ static UITextView* previewTextView;
 
 -(void) openButtonPressed
 {
-    [self dismissDetailTweet];
     NSString* id = [self.previewTweet objectForKey:@"id"];
-    [self.plugin launchURL: [NSURL URLWithString:[NSString stringWithFormat:@"twitter://status?id=%@", id]]]; 
+    BOOL isDM = ([self.previewTweet objectForKey:@"directMessage"] != nil);
+    [self dismissDetailTweet];
+    [self.plugin launchURL: [NSURL URLWithString:[NSString stringWithFormat:@"twitter://%@?id=%@",( isDM ? @"messages" : @"status" ), id]]]; 
     
 }
 
@@ -614,6 +629,7 @@ static UITextView* previewTextView;
     
 	if (self.isViewLoaded)
 	{
+        [self switchToWriteView];
 		if (NSString* name = [self.previewTweet objectForKey:@"screenName"]){
             if(isRetweet){
                 NSString *tweetText = [self.previewTweet objectForKey:@"tweet"];
@@ -625,7 +641,6 @@ static UITextView* previewTextView;
 			self.previewTextView.text = @"";
         
 		[self setCount:140 - self.previewTextView.text.length];
-		[self switchToWriteView];
         [self.previewTextView becomeFirstResponder];
         
 	}
@@ -683,17 +698,27 @@ static UITextView* previewTextView;
     
     UIBarButtonItem *reply = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemReply target:self action:@selector(doReply)];
     UIBarButtonItem *flexspace = [[UIBarButtonItem alloc] initWithBarButtonSystemItem: UIBarButtonSystemItemFlexibleSpace target:nil action:nil];
-    UIImage* img = [UIImage li_imageWithContentsOfResolutionIndependentFile:[self.plugin.bundle pathForResource:@"LITwitterRetweet" ofType:@"png"]];
-    UIBarButtonItem *retweet = [[UIBarButtonItem alloc] initWithImage:img style:UIBarButtonItemStylePlain target:self action:@selector(doRetweet)];
     UIBarButtonItem *open = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemAction target:self action:@selector(openButtonPressed)];
+    UIBarButtonItem *retweet = nil;
     
-    NSArray *buttons = [NSArray arrayWithObjects: reply,  flexspace, retweet, flexspace, open, nil];
+    NSArray *buttons = nil;
+    
+    BOOL isDM = ([self.previewTweet objectForKey:@"directMessage"] != nil);
+    if(isDM){
+        
+        buttons = [NSArray arrayWithObjects: reply, flexspace, open, nil];
+        
+    }else{
+        UIImage* img = [UIImage li_imageWithContentsOfResolutionIndependentFile:[self.plugin.bundle pathForResource:@"LITwitterRetweet" ofType:@"png"]];
+        retweet = [[UIBarButtonItem alloc] initWithImage:img style:UIBarButtonItemStylePlain target:self action:@selector(doRetweet)];
+        buttons = [NSArray arrayWithObjects: reply,  flexspace, retweet, flexspace, open, nil];
+    }
     [self setToolbarItems:buttons];
-    
-    [retweet release];
     [reply release];
     [open release];
     [flexspace release];            
+    if(retweet != nil)
+        [retweet release];
 	return self.previewController.view;
 }
 
@@ -810,10 +835,10 @@ static UITextView* previewTextView;
 		{
 			[self.currentTweet setValue:self.xml forKey:@"name"];
 		}
-	        else if([self.currentTweet objectForKey:@"rtname"] == nil)
-	        {
-	            [self.currentTweet setValue:self.xml forKey:@"rtname"];    
-	        }
+        else if([self.currentTweet objectForKey:@"rtname"] == nil)
+        {
+            [self.currentTweet setValue:self.xml forKey:@"rtname"];    
+        }
 	}
 	else if ([elementName isEqualToString:@"screen_name"])
 	{
@@ -871,13 +896,13 @@ static UITextView* previewTextView;
 		return 0;
     
 	NSDictionary* elem = [self.tweets objectAtIndex:row];
-        NSString* text = [elem objectForKey:@"tweet"];
-
+    NSString* text = [elem objectForKey:@"tweet"];
+    
 	text = [@"         " stringByAppendingString:text];
-		
+    
 	int width = tableView.frame.size.width - 10;
-        CGSize s = [text sizeWithFont:tableView.theme.detailStyle.font constrainedToSize:CGSizeMake(width, 480) lineBreakMode:UILineBreakModeWordWrap];
-        return (s.height + tableView.theme.summaryStyle.font.pointSize + 8);
+    CGSize s = [text sizeWithFont:tableView.theme.detailStyle.font constrainedToSize:CGSizeMake(width, 480) lineBreakMode:UILineBreakModeWordWrap];
+    return (s.height + tableView.theme.summaryStyle.font.pointSize + 8);
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfItemsInSection:(NSInteger)section 
@@ -885,7 +910,7 @@ static UITextView* previewTextView;
 	int max = 5;
 	if (NSNumber* n = [self.plugin.preferences objectForKey:@"MaxTweets"])
 		max = n.intValue;
-   
+    
 	return (self.tweets.count > max ? max : self.tweets.count);
 }
 
@@ -935,25 +960,25 @@ static UITextView* previewTextView;
 	int selected = [sender selectedSegmentIndex];
 	if (selectedIndex == selected)
 		return;
-
+    
 	switch(selected)
 	{
-            case 0:
-                [self switchToHomeline];
-                break;
-            case 1:
-                [self switchToMentions];
-                break;
-            case 2:
-                [self switchToMessages];
-                break;
-            case 3:
+        case 0:
+            [self switchToHomeline];
+            break;
+        case 1:
+            [self switchToMentions];
+            break;
+        case 2:
+            [self switchToMessages];
+            break;
+        case 3:
 	        [self showNewTweet];
 	        [sender setSelectedSegmentIndex:selectedIndex];
-		return;
-        }
-
-       	selectedIndex = selected;    
+            return;
+    }
+    
+    selectedIndex = selected;    
 }
 
 - (UITableViewCell *)tableView:(LITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath 
@@ -984,11 +1009,11 @@ static UITextView* previewTextView;
 				[cell.contentView addSubview:container];
                 
                 //!TODO localized labels
-                NSArray *segmentTextContent = [NSArray arrayWithObjects: @"Mentions", @"Timeline", @"Messages", @"Compose",  nil];
+                NSArray *segmentTextContent = [NSArray arrayWithObjects: @"Timeline", @"Mentions", @"Messages", @"Compose",  nil];
                 
                 UISegmentedControl *segments = [[[UISegmentedControl alloc] initWithItems:segmentTextContent] autorelease];
                 segments.frame = CGRectMake(-5, 0, tableView.frame.size.width + 10, 24);
-		segments.tag = 43443;
+                segments.tag = 43443;
                 segments.segmentedControlStyle = UISegmentedControlStyleBezeled;
                 segments.selectedSegmentIndex = selectedIndex;
                 segments.tintColor = [UIColor clearColor];
@@ -996,10 +1021,10 @@ static UITextView* previewTextView;
                 segments.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
                 [container addSubview:segments];
 			}
-
-                UISegmentedControl *segments = [cell viewWithTag:43443];
-		segments.selectedSegmentIndex = selectedIndex;
-
+            
+            UISegmentedControl *segments = [cell viewWithTag:43443];
+            segments.selectedSegmentIndex = selectedIndex;
+            
 			return cell;
 		}
 		row--;
@@ -1047,24 +1072,24 @@ static UITextView* previewTextView;
     
 }
 /*
-MSHook(void, setDelegate, id self, SEL sel, id delegate)
-{
-	if (previewTextView)
-		[previewTextView becomeFirstResponder];
-	else
-		_setDelegate(self, sel, delegate);
-    
-}
-
-
-MSHook(BOOL, handleKeyEvent, id self, SEL sel, id event)
-{
-	if (previewTextView)
-		return NO;
-	else
-		return _handleKeyEvent(self, sel, event);
-}
-*/
+ MSHook(void, setDelegate, id self, SEL sel, id delegate)
+ {
+ if (previewTextView)
+ [previewTextView becomeFirstResponder];
+ else
+ _setDelegate(self, sel, delegate);
+ 
+ }
+ 
+ 
+ MSHook(BOOL, handleKeyEvent, id self, SEL sel, id event)
+ {
+ if (previewTextView)
+ return NO;
+ else
+ return _handleKeyEvent(self, sel, event);
+ }
+ */
 
 static void callInterruptedApp(CFNotificationCenterRef center, void *observer, CFStringRef name, const void *object, CFDictionaryRef userInfo)
 {
@@ -1099,11 +1124,11 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
 	[center addObserver:self selector:@selector(update:) name:LITimerNotification object:nil];
 	[center addObserver:self selector:@selector(update:) name:LIViewReadyNotification object:nil];
     
-//	Class $UIKeyboardImpl = objc_getClass("UIKeyboardImpl");
-//	Hook(UIKeyboardImpl, setDelegate:, setDelegate);
+    //	Class $UIKeyboardImpl = objc_getClass("UIKeyboardImpl");
+    //	Hook(UIKeyboardImpl, setDelegate:, setDelegate);
     
-//	Class $SBAwayController = objc_getClass("SBAwayController");
-//	Hook(SBAwayController, handleKeyEvent:, handleKeyEvent);
+    //	Class $SBAwayController = objc_getClass("SBAwayController");
+    //	Hook(SBAwayController, handleKeyEvent:, handleKeyEvent);
     
 	if (directMessageIcon)
 		[directMessageIcon release];
@@ -1120,7 +1145,7 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
 	[super dealloc];
 }
 
--(void) loadTweets:(NSString*) url parameters:(NSDictionary*) parameters
+-(BOOL) loadTweets:(NSString*) url parameters:(NSDictionary*) parameters
 {
 	NSString* fullURL = url;
 	if (parameters.count > 0)
@@ -1139,15 +1164,21 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
 	if (!auth.authorized)
 	{
 		NSLog(@"LI:Twitter: Twitter client is not authorized!");
-		return;
+		return NO;
 	}
     
 	NSString* header = [auth OAuthorizationHeader:request.URL method:@"GET" body:nil];
 	[request setValue:header forHTTPHeaderField:@"Authorization"];
+    NSError *anError = nil;
+	NSData* data = [NSURLConnection sendSynchronousRequest:request returningResponse:NULL error:&anError];
     
-	NSData* data = [NSURLConnection sendSynchronousRequest:request returningResponse:NULL error:NULL];
-//	NSLog(@"LI:Twitter: Tweet data: %@", [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease]);
-
+    if(data == nil)
+    {
+        //        if(error != nil){ //!TODO Better error handling like ReqTimedOut out or host unreachable etc.
+        return NO;
+        //        }
+    }
+    
 	NSXMLParser* parser = [[NSXMLParser alloc] initWithData:data];
 	parser.delegate = self;
     
@@ -1161,6 +1192,7 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
 	}
     
 	[parser release];
+    return YES;
 }
 
 -(void) updateTweetsInView:(NSMutableArray*) array
@@ -1189,56 +1221,62 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
 {	
 	if (SBTelephonyManager* mgr = [$SBTelephonyManager sharedTelephonyManager])
 	{
-                if (mgr.inCall || mgr.incomingCallExists)
+        if (mgr.inCall || mgr.incomingCallExists)
 		{
 			NSLog(@"LI:Twitter: No data connection available.");
-                        return;
+            return;
 		}
 	}
-
+    
 	NSLog(@"LI:Twitter: Loading tweets...");
-
+    
 	int count = 5;
 	if (NSNumber* n = [self.plugin.preferences objectForKey:@"MaxTweets"])
 		count = n.intValue;
-
+    
 	BOOL showFriends = true;
-//	if (NSNumber* n = [self.plugin.preferences objectForKey:@"ShowFriends"])
-//		showFriends = n.boolValue;
-
+    //	if (NSNumber* n = [self.plugin.preferences objectForKey:@"ShowFriends"])
+    //		showFriends = n.boolValue;
+    
 	if (showFriends)
 	{
 		self.type = @"friend";
-		[self loadTweets:@"https://api.twitter.com/statuses/home_timeline.xml" parameters:[NSDictionary dictionaryWithObjectsAndKeys:[NSString stringWithFormat:@"%d", count+1], @"count", nil]];
-        self.homeline = [self.tempTweets.allValues sortedArrayUsingFunction:sortByDate context:nil];
-        [self.tempTweets removeAllObjects];
-        self.currentTweet = nil;
+		if([self loadTweets:@"https://api.twitter.com/statuses/home_timeline.xml" parameters:[NSDictionary dictionaryWithObjectsAndKeys:[NSString stringWithFormat:@"%d", count+1], @"count", nil]])
+        {
+            self.homeline = [self.tempTweets.allValues sortedArrayUsingFunction:sortByDate context:nil];
+            [self.tempTweets removeAllObjects];
+            self.currentTweet = nil;
+        }
 	}
     
 	BOOL showMentions = true;
-//	if (NSNumber* n = [self.plugin.preferences objectForKey:@"ShowMentions"])
-//		showMentions = n.boolValue;
+    //	if (NSNumber* n = [self.plugin.preferences objectForKey:@"ShowMentions"])
+    //		showMentions = n.boolValue;
     
 	if (showMentions)
 	{
 		self.type = @"mention";
-		[self loadTweets:@"https://api.twitter.com/statuses/mentions.xml" parameters:[NSDictionary dictionaryWithObjectsAndKeys:[NSString stringWithFormat:@"%d", count+1], @"count", nil]];
-        self.mentions = [self.tempTweets.allValues sortedArrayUsingFunction:sortByDate context:nil];
-        [self.tempTweets removeAllObjects];
-        self.currentTweet = nil;
+        if([self loadTweets:@"https://api.twitter.com/statuses/mentions.xml" parameters:[NSDictionary dictionaryWithObjectsAndKeys:[NSString stringWithFormat:@"%d", count+1], @"count", nil]])
+        {
+            self.mentions = [self.tempTweets.allValues sortedArrayUsingFunction:sortByDate context:nil];
+            [self.tempTweets removeAllObjects];
+            self.currentTweet = nil;
+        }
 	}
     
 	BOOL showDMs = true;
-//	if (NSNumber* n = [self.plugin.preferences objectForKey:@"ShowDirectMessages"])
-//		showDMs = n.boolValue;
+    //	if (NSNumber* n = [self.plugin.preferences objectForKey:@"ShowDirectMessages"])
+    //		showDMs = n.boolValue;
     
 	if (showDMs)
 	{
 		self.type = @"directMessage";
-		[self loadTweets:@"https://api.twitter.com/1/direct_messages.xml" parameters:[NSDictionary dictionaryWithObjectsAndKeys:[NSString stringWithFormat:@"%d", count+1], @"count", nil]];
-        self.directMessages = [self.tempTweets.allValues sortedArrayUsingFunction:sortByDate context:nil];
-        [self.tempTweets removeAllObjects];
-        self.currentTweet = nil;
+		if([self loadTweets:@"https://api.twitter.com/1/direct_messages.xml" parameters:[NSDictionary dictionaryWithObjectsAndKeys:[NSString stringWithFormat:@"%d", count+1], @"count", nil]])
+        {
+            self.directMessages = [self.tempTweets.allValues sortedArrayUsingFunction:sortByDate context:nil];
+            [self.tempTweets removeAllObjects];
+            self.currentTweet = nil;
+        }
 	}
     
     if(selectedIndex == 0)
