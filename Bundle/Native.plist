@@ -4,6 +4,7 @@
 <dict>
 	<key>items</key>
 	<array>
+<!--
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>
@@ -80,6 +81,7 @@
 				</dict>
 			</array>
 		</dict>
+-->
 		<dict>
 			<key>cell</key>
 			<string>PSGroupCell</string>

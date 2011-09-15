@@ -248,7 +248,7 @@ static UIImage* directMessageIcon;
 
 
 static NSNumber* YES_VALUE = [NSNumber numberWithBool:YES];
-static int selectedIndex = 1;
+static int selectedIndex = 0;
 static BOOL WRITE_MODE  = YES;
 static UITextView* previewTextView;
 #define UIColorFromRGB(rgbValue) [UIColor colorWithRed:((float)((rgbValue & 0xFF0000) >> 16))/255.0 green:((float)((rgbValue & 0xFF00) >> 8))/255.0 blue:((float)(rgbValue & 0xFF))/255.0 alpha:1.0]
@@ -261,7 +261,6 @@ static UITextView* previewTextView;
 }
 
 @property (nonatomic, retain) LIPlugin* plugin;
-@property (nonatomic, retain) UITableView* myTableView;
 @property (retain) NSMutableArray* tweets;
 @property (retain) NSMutableArray* homeline;
 @property (retain) NSMutableArray* mentions;
@@ -294,7 +293,7 @@ static UITextView* previewTextView;
 
 @synthesize tweets, homeline, mentions, directMessages, tempTweets, xml, plugin, imageCache, type, currentTweet, previewController, countLabel;
 
-@synthesize previewTweet, myTableView, previewTextView, newTweetView, webView, editView, readView, activity;
+@synthesize previewTweet, previewTextView, newTweetView, webView, editView, readView, activity;
 
 -(void) setCount:(int) count
 {
@@ -305,12 +304,9 @@ static UITextView* previewTextView;
     return YES;
 }
 */
--(void) previewDidShow:(LIPreview*) preview
+
+-(void) showKeyboard
 {
-    self.previewTextView.userInteractionEnabled = YES;
-    if(WRITE_MODE){
-        [self switchToWriteView];
-        [self.previewTextView becomeFirstResponder];
 	if (Class peripheral = objc_getClass("UIPeripheralHost"))
         {
                 [[peripheral sharedInstance] setAutomaticAppearanceEnabled:YES];
@@ -320,16 +316,21 @@ static UITextView* previewTextView;
         {
                 [[UIKeyboard automaticKeyboard] orderInWithAnimation:YES];
         }
+}
+
+-(void) previewDidShow:(LIPreview*) preview
+{
+    self.previewTextView.userInteractionEnabled = YES;
+    if(WRITE_MODE){
+        [self switchToWriteView];
     }
     else{
         [self switchToReadView];
     }
 }
 
--(void) previewWillDismiss:(LIPreview*) preview
+-(void) hideKeyboard
 {
-        previewTextView = nil;
-
         if (Class peripheral = objc_getClass("UIPeripheralHost"))
         {
                 [[peripheral sharedInstance] orderOutAutomatic];
@@ -339,6 +340,12 @@ static UITextView* previewTextView;
         {
                 [[UIKeyboard automaticKeyboard] orderOutWithAnimation:YES];
         }
+}
+
+-(void) previewWillDismiss:(LIPreview*) preview
+{
+        previewTextView = nil;
+	[self hideKeyboard];
 }
 
 -(void) loadView
@@ -491,6 +498,7 @@ static UITextView* previewTextView;
     [self.previewTextView resignFirstResponder];
     [self.view sendSubviewToBack:self.editView];
     [self.view bringSubviewToFront:self.readView];
+	[self hideKeyboard];
 }
 -(void) switchToWriteView
 {
@@ -498,6 +506,7 @@ static UITextView* previewTextView;
     [self.view sendSubviewToBack:self.readView];
     [self.view bringSubviewToFront:self.editView];
     [self.previewTextView becomeFirstResponder];
+	[self showKeyboard];
 }
 
 - (BOOL) keyboardInputShouldDelete:(UITextView*)input
@@ -801,10 +810,10 @@ static UITextView* previewTextView;
 		{
 			[self.currentTweet setValue:self.xml forKey:@"name"];
 		}
-        else if([self.currentTweet objectForKey:@"rtname"] == nil)
-        {
-            [self.currentTweet setValue:self.xml forKey:@"rtname"];    
-        }
+	        else if([self.currentTweet objectForKey:@"rtname"] == nil)
+	        {
+	            [self.currentTweet setValue:self.xml forKey:@"rtname"];    
+	        }
 	}
 	else if ([elementName isEqualToString:@"screen_name"])
 	{
@@ -873,11 +882,10 @@ static UITextView* previewTextView;
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfItemsInSection:(NSInteger)section 
 {
-    self.myTableView = tableView;
 	int max = 5;
 	if (NSNumber* n = [self.plugin.preferences objectForKey:@"MaxTweets"])
 		max = n.intValue;
-    
+   
 	return (self.tweets.count > max ? max : self.tweets.count);
 }
 
@@ -924,27 +932,28 @@ static UITextView* previewTextView;
 }
 - (void)segmentAction:(id)sender
 {
-    int selected = [sender selectedSegmentIndex];
-    if(selected == 3) //compose
-    { 
-        [self showNewTweet];
-        [sender setSelectedSegmentIndex:selectedIndex];//
-    }
-    else if(selected > -1 && selected < 3 && self.myTableView != nil && self.tweets != nil && [self.tweets count] > 0)
-    {
-        switch(selected){
+	int selected = [sender selectedSegmentIndex];
+	if (selectedIndex == selected)
+		return;
+
+	switch(selected)
+	{
             case 0:
-                [self switchToMentions];
+                [self switchToHomeline];
                 break;
             case 1:
-                [self switchToHomeline];
+                [self switchToMentions];
                 break;
             case 2:
                 [self switchToMessages];
                 break;
+            case 3:
+	        [self showNewTweet];
+	        [sender setSelectedSegmentIndex:selectedIndex];
+		return;
         }
-        selectedIndex = selected;    
-    }
+
+       	selectedIndex = selected;    
 }
 
 - (UITableViewCell *)tableView:(LITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath 
@@ -979,13 +988,18 @@ static UITextView* previewTextView;
                 
                 UISegmentedControl *segments = [[[UISegmentedControl alloc] initWithItems:segmentTextContent] autorelease];
                 segments.frame = CGRectMake(-5, 0, tableView.frame.size.width + 10, 24);
+		segments.tag = 43443;
                 segments.segmentedControlStyle = UISegmentedControlStyleBezeled;
-                segments.tintColor = [UIColor clearColor];
                 segments.selectedSegmentIndex = selectedIndex;
+                segments.tintColor = [UIColor clearColor];
                 [segments addTarget:self action:@selector(segmentAction:) forControlEvents:UIControlEventValueChanged];
                 segments.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
                 [container addSubview:segments];
 			}
+
+                UISegmentedControl *segments = [cell viewWithTag:43443];
+		segments.selectedSegmentIndex = selectedIndex;
+
 			return cell;
 		}
 		row--;
@@ -1132,7 +1146,7 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
 	[request setValue:header forHTTPHeaderField:@"Authorization"];
     
 	NSData* data = [NSURLConnection sendSynchronousRequest:request returningResponse:NULL error:NULL];
-	NSLog(@"LI:Twitter: Tweet data: %@", [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease]);
+//	NSLog(@"LI:Twitter: Tweet data: %@", [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease]);
 
 	NSXMLParser* parser = [[NSXMLParser alloc] initWithData:data];
 	parser.delegate = self;
@@ -1149,34 +1163,25 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
 	[parser release];
 }
 
--(BOOL) reloadTableData
+-(void) updateTweetsInView:(NSMutableArray*) array
 {
-    if(self.myTableView != nil){
-        [self.myTableView reloadData];
-        return YES;
-    }
-    return NO;
+	self.tweets = array;
+	[self.plugin updateView:[NSDictionary dictionaryWithObjectsAndKeys:self.tweets, @"tweets", nil]];
 }
 
 -(void) switchToHomeline
 {
-    if([self.homeline count] < 1) return;
-    self.tweets = self.homeline;
-    [self reloadTableData];
+	[self updateTweetsInView:self.homeline];
 }
 
 -(void) switchToMentions
 {
-    if([self.mentions count] < 1) return;
-    self.tweets = self.mentions;
-    [self reloadTableData];
+	[self updateTweetsInView:self.mentions];
 }
 
 -(void) switchToMessages
 {
-    if([self.directMessages count] < 1) return;
-    self.tweets = self.directMessages;
-    [self reloadTableData];
+	[self updateTweetsInView:self.directMessages];
 }
 
 
@@ -1198,8 +1203,8 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
 		count = n.intValue;
 
 	BOOL showFriends = true;
-	if (NSNumber* n = [self.plugin.preferences objectForKey:@"ShowFriends"])
-		showFriends = n.boolValue;
+//	if (NSNumber* n = [self.plugin.preferences objectForKey:@"ShowFriends"])
+//		showFriends = n.boolValue;
 
 	if (showFriends)
 	{
@@ -1211,8 +1216,8 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
 	}
     
 	BOOL showMentions = true;
-	if (NSNumber* n = [self.plugin.preferences objectForKey:@"ShowMentions"])
-		showMentions = n.boolValue;
+//	if (NSNumber* n = [self.plugin.preferences objectForKey:@"ShowMentions"])
+//		showMentions = n.boolValue;
     
 	if (showMentions)
 	{
@@ -1224,8 +1229,8 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
 	}
     
 	BOOL showDMs = true;
-	if (NSNumber* n = [self.plugin.preferences objectForKey:@"ShowDirectMessages"])
-		showDMs = n.boolValue;
+//	if (NSNumber* n = [self.plugin.preferences objectForKey:@"ShowDirectMessages"])
+//		showDMs = n.boolValue;
     
 	if (showDMs)
 	{
@@ -1236,27 +1241,18 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
         self.currentTweet = nil;
 	}
     
-    NSMutableDictionary* dict = [NSMutableDictionary dictionaryWithCapacity:1];
-    
     if(selectedIndex == 0)
     {
-        [self switchToMentions];
-        
+    	[self updateTweetsInView:self.homeline];
     }
     else if(selectedIndex == 1)
     {
-        [self switchToHomeline];
-            
+    	[self updateTweetsInView:self.mentions];
     }
     else if(selectedIndex == 2)
     {
-        
-        [self switchToMessages];
-        
+    	[self updateTweetsInView:self.directMessages];
     }
-    
-    [dict setValue:self.tweets forKey:@"tweets"];  
-    [self.plugin updateView:dict];
     
 	[self.tempTweets removeAllObjects];
 	self.currentTweet = nil;
