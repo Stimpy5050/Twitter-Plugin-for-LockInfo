@@ -9,6 +9,7 @@
 #import "TwitterAuth.h"
 #import "OAuthCore.h"
 #import "KeychainUtils.h"
+#import "TwitterAuthSecrets.h"
 #import <CommonCrypto/CommonHMAC.h>
 
 @interface NSString (TwitterAuthAdditions)
@@ -65,9 +66,6 @@
 }
 
 @end
-
-static NSString* CONSUMER_KEY = @"";
-static NSString* CONSUMER_SECRET  = @"";
 
 @implementation TwitterAuth
 

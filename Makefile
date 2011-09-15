@@ -13,7 +13,7 @@ LDFLAGS= -framework Foundation \
 	-framework CoreGraphics \
 	-framework Preferences \
 	-framework GraphicsServices \
-	-L../../../Common \
+	-L../iphone/Common \
 	-L$(SDK)/var/lib \
 	-L$(SDK)/usr/lib \
 	-F$(SDK)/System/Library/Frameworks \
@@ -26,7 +26,7 @@ LDFLAGS= -framework Foundation \
 CFLAGS= -I/var/include \
   -I$(SDK)/var/include \
   -I/var/include/gcc/darwin/4.0 \
-  -I../../.. \
+  -I../iphone/LockInfo/SDK/LockInfo \
   -I"$(SDK)/usr/include" \
   -I"/Developer/Platforms/iPhoneOS.platform/Developer/usr/include" \
   -I"/Developer/Platforms/iPhoneOS.platform/Developer/usr/lib/gcc/arm-apple-darwin10/4.0.1/include" \
@@ -38,7 +38,7 @@ Bundle=com.ashman.lockinfo.$(Name).bundle
 all:	package
 
 $(Name):	NSData+Base64.o KeychainUtils.o OAuth+Additions.o OAuthCore.o TwitterAuth.o $(Name).o
-		$(LD) $(LDFLAGS) -lcommon -bundle -o $@ $^
+		$(LD) $(LDFLAGS) -bundle -o $@ $^
 		ldid -S $@
 		chmod 755 $@
 

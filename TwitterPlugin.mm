@@ -13,7 +13,7 @@
 #include "KeychainUtils.h"
 #include "NSData+Base64.h"
 #include "TwitterAuth.h"
-#include "../../SDK/Plugin.h"
+#include "Plugin.h"
 
 @interface UIScreen (LIAdditions)
 
@@ -189,12 +189,6 @@ static NSInteger sortByDate(id obj1, id obj2, void* context)
 
 static UIImage* directMessageIcon;
 
-@interface UIKeyboard : NSObject
-
-+ (CGSize) defaultSize;
-
-@end
-
 @implementation TweetView
 
 @synthesize name, time, image, theme, tweet, directMessage;
@@ -239,6 +233,19 @@ static UIImage* directMessageIcon;
 }
 
 @end
+
+@interface UIKeyboardImpl : UIView
+@property (nonatomic, retain) id delegate;
+@end
+
+@interface UIKeyboard : UIView
+
++(UIKeyboard*) activeKeyboard;
++(void) initImplementationNow;
++(CGSize) defaultSize;
+
+@end
+
 
 static NSNumber* YES_VALUE = [NSNumber numberWithBool:YES];
 static int selectedIndex = 1;
@@ -304,10 +311,34 @@ static UITextView* previewTextView;
     if(WRITE_MODE){
         [self switchToWriteView];
         [self.previewTextView becomeFirstResponder];
+	if (Class peripheral = objc_getClass("UIPeripheralHost"))
+        {
+                [[peripheral sharedInstance] setAutomaticAppearanceEnabled:YES];
+                [[peripheral sharedInstance] orderInAutomatic];
+        }
+        else
+        {
+                [[UIKeyboard automaticKeyboard] orderInWithAnimation:YES];
+        }
     }
     else{
         [self switchToReadView];
     }
+}
+
+-(void) previewWillDismiss:(LIPreview*) preview
+{
+        previewTextView = nil;
+
+        if (Class peripheral = objc_getClass("UIPeripheralHost"))
+        {
+                [[peripheral sharedInstance] orderOutAutomatic];
+                [[peripheral sharedInstance] setAutomaticAppearanceEnabled:NO];
+        }
+        else
+        {
+                [[UIKeyboard automaticKeyboard] orderOutWithAnimation:YES];
+        }
 }
 
 -(void) loadView
@@ -637,7 +668,7 @@ static UITextView* previewTextView;
     UINavigationBar* bar = self.previewController.navigationBar;
     bar.barStyle = UIBarStyleBlackOpaque;
     
-    UIToolbar* toolbar = self.previewController.toolbar;
+    UIToolbar* toolbar = [self.previewController toolbar];
     toolbar.barStyle = UIBarStyleBlackOpaque;
     [self.previewController setToolbarHidden:NO];
     
@@ -1101,7 +1132,7 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
 	[request setValue:header forHTTPHeaderField:@"Authorization"];
     
 	NSData* data = [NSURLConnection sendSynchronousRequest:request returningResponse:NULL error:NULL];
-//	NSLog(@"LI:Twitter: Tweet data: %@", [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease]);
+	NSLog(@"LI:Twitter: Tweet data: %@", [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease]);
 
 	NSXMLParser* parser = [[NSXMLParser alloc] initWithData:data];
 	parser.delegate = self;
