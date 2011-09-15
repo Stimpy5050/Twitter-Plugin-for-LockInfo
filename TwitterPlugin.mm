@@ -250,6 +250,7 @@ static UIImage* directMessageIcon;
 static NSNumber* YES_VALUE = [NSNumber numberWithBool:YES];
 static int selectedIndex = 0;
 static BOOL WRITE_MODE  = YES;
+static NSString * const RT_IDENTIFIER_TEXT = @"_li__tp___rt____id_____";
 static UITextView* previewTextView;
 #define UIColorFromRGB(rgbValue) [UIColor colorWithRed:((float)((rgbValue & 0xFF0000) >> 16))/255.0 green:((float)((rgbValue & 0xFF00) >> 8))/255.0 blue:((float)(rgbValue & 0xFF))/255.0 alpha:1.0]
 
@@ -318,16 +319,6 @@ static UITextView* previewTextView;
     }
 }
 
--(void) previewDidShow:(LIPreview*) preview
-{
-    if(WRITE_MODE){
-        [self switchToWriteView];
-    }
-    else{
-        [self switchToReadView];
-    }
-}
-
 -(void) hideKeyboard
 {
     if (Class peripheral = objc_getClass("UIPeripheralHost"))
@@ -339,12 +330,6 @@ static UITextView* previewTextView;
     {
         [[UIKeyboard automaticKeyboard] orderOutWithAnimation:YES];
     }
-}
-
--(void) previewWillDismiss:(LIPreview*) preview
-{
-    previewTextView = nil;
-	[self hideKeyboard];
 }
 
 -(void) loadView
@@ -505,8 +490,9 @@ static UITextView* previewTextView;
     WRITE_MODE = YES;
     [self.view sendSubviewToBack:self.readView];
     [self.view bringSubviewToFront:self.editView];
+    [self.previewTextView becomeFirstResponder];
 	[self showKeyboard];
-    [self.previewTextView becomeFirstResponder];//!TODO Needs some more fix. Keyboard apepars but focus is not in textView. Need to touch it explicitely to see cursor.
+
 }
 
 - (BOOL) keyboardInputShouldDelete:(UITextView*)input
@@ -544,6 +530,14 @@ static UITextView* previewTextView;
         NSString* name = [self.previewTweet objectForKey:@"screenName"];
         [params setValue:name forKey:@"screen_name"];
     }
+    else if([tweet isEqualToString: RT_IDENTIFIER_TEXT])
+    {
+        if (NSString* id = [self.previewTweet objectForKey:@"id"])
+        {
+            params = [NSMutableDictionary dictionary];    
+            url = [NSString stringWithFormat:@"https://api.twitter.com/1/statuses/retweet/%@.xml", id];
+        }
+    }
     else
     {
         params = [NSMutableDictionary dictionaryWithObjectsAndKeys:tweet, @"status", nil];
@@ -578,9 +572,8 @@ static UITextView* previewTextView;
 -(void) dismissTweet
 {
     [self.previewTextView resignFirstResponder];
-    previewTextView = nil;
-    [self hideKeyboard]; //!TODO Remove later. Need to hide k/b on tweet dismiss (hide from previewWillDismiss not working)
-	[self.plugin dismissPreview];
+    [self.plugin dismissPreview];
+    [self hideKeyboard]; 
 }
 
 -(void) dismissDetailTweet
@@ -630,12 +623,25 @@ static UITextView* previewTextView;
 	if (self.isViewLoaded)
 	{
         [self switchToWriteView];
-		if (NSString* name = [self.previewTweet objectForKey:@"screenName"]){
-            if(isRetweet){
+		if (NSString* name = [self.previewTweet objectForKey:@"screenName"])
+        {
+            if(isRetweet)
+            {
                 NSString *tweetText = [self.previewTweet objectForKey:@"tweet"];
                 self.previewTextView.text = [NSString stringWithFormat:@"RT @%@ %@", name, tweetText];
-            }else
-                self.previewTextView.text = [NSString stringWithFormat:@"@%@ ", name];
+            }
+            else
+            {
+                BOOL isDM = ([self.previewTweet objectForKey:@"directMessage"] != nil);
+                if(isDM)
+                {
+                    self.previewTextView.text = @"";
+                }
+                else{
+                    self.previewTextView.text = [NSString stringWithFormat:@"@%@ ", name];
+                }
+                
+            }
         }
 		else
 			self.previewTextView.text = @"";
@@ -731,9 +737,21 @@ static UITextView* previewTextView;
 }
 - (void) doRetweet
 {
-    [self.previewController setToolbarHidden:YES];
-	[self.plugin showPreview: [self doTweet:self.previewTweet isRetweet:YES]];
-    [self switchToWriteView];
+    BOOL useOldRT = NO;
+	if (NSNumber* n = [self.plugin.preferences objectForKey:@"UseOldRT"])
+		useOldRT = n.boolValue;
+    if(useOldRT)
+    {
+    
+        [self.previewController setToolbarHidden:YES];
+        [self.plugin showPreview: [self doTweet:self.previewTweet isRetweet:YES]];
+        [self switchToWriteView];
+    }
+    else
+    {
+        [self performSelectorInBackground:@selector(sendTweetInBackground:) withObject:RT_IDENTIFIER_TEXT];
+        [self dismissDetailTweet];
+    }
     
 }
 
@@ -1123,6 +1141,8 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
 	NSNotificationCenter* center = [NSNotificationCenter defaultCenter];
 	[center addObserver:self selector:@selector(update:) name:LITimerNotification object:nil];
 	[center addObserver:self selector:@selector(update:) name:LIViewReadyNotification object:nil];
+    [center addObserver:self selector:@selector(screenUndimmed:) name:LIUndimScreenNotification object:nil];
+    
     
     //	Class $UIKeyboardImpl = objc_getClass("UIKeyboardImpl");
     //	Hook(UIKeyboardImpl, setDelegate:, setDelegate);
@@ -1320,8 +1340,15 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
     
 	[pool release];
 }
-
-
+//Is there screen dim/screen lock notificaion as well?
+- (void) screenUndimmed:(NSNotification*) notif
+{
+    if(WRITE_MODE)
+    {
+        WRITE_MODE = NO;
+        [self hideKeyboard];
+    }
+}
 - (void) update:(NSNotification*) notif
 {
 	[self updateTweets:NO];
