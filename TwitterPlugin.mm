@@ -984,7 +984,7 @@ static UITextView* previewTextView;
 				[cell.contentView addSubview:container];
                 
                 //!TODO localized labels
-                NSArray *segmentTextContent = [NSArray arrayWithObjects: @"Mentions", @"Timeline", @"Messages", @"Compose",  nil];
+                NSArray *segmentTextContent = [NSArray arrayWithObjects:@"Timeline", @"Mentions", @"Messages", @"Compose",  nil];
                 
                 UISegmentedControl *segments = [[[UISegmentedControl alloc] initWithItems:segmentTextContent] autorelease];
                 segments.frame = CGRectMake(-5, 0, tableView.frame.size.width + 10, 24);
