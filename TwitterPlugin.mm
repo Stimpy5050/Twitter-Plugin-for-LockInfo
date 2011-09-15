@@ -320,6 +320,7 @@ static UITextView* previewTextView;
 
 -(void) previewDidShow:(LIPreview*) preview
 {
+    self.previewTextView.userInteractionEnabled = YES;
     if(WRITE_MODE){
         [self switchToWriteView];
     }
@@ -343,7 +344,7 @@ static UITextView* previewTextView;
 
 -(void) previewWillDismiss:(LIPreview*) preview
 {
-    previewTextView = nil;
+        previewTextView = nil;
 	[self hideKeyboard];
 }
 
@@ -359,7 +360,6 @@ static UITextView* previewTextView;
 	UITextView* tv = [[[UITextView alloc] initWithFrame:v.bounds] autorelease];
 	tv.backgroundColor = [UIColor blackColor];
 	tv.editable = YES;
-    tv.userInteractionEnabled = YES;
 	tv.keyboardAppearance = UIKeyboardAppearanceAlert;
 	tv.font = [UIFont systemFontOfSize:20];
 	tv.textColor = [UIColor whiteColor];
@@ -505,8 +505,8 @@ static UITextView* previewTextView;
     WRITE_MODE = YES;
     [self.view sendSubviewToBack:self.readView];
     [self.view bringSubviewToFront:self.editView];
+    [self.previewTextView becomeFirstResponder];
 	[self showKeyboard];
-    [self.previewTextView becomeFirstResponder];//!TODO Needs some more fix. Keyboard apepars but focus is not in textView. Need to touch it explicitely to see cursor.
 }
 
 - (BOOL) keyboardInputShouldDelete:(UITextView*)input
@@ -534,25 +534,13 @@ static UITextView* previewTextView;
 {
 	NSAutoreleasePool* pool = [[NSAutoreleasePool alloc] init];
     
-    BOOL isDM = ([self.previewTweet objectForKey:@"directMessage"] != nil);
-    NSString* url = @"https://api.twitter.com/1/statuses/update.xml";
-    NSMutableDictionary* params = nil;    
-    if(isDM)
-    {
-        url = @"https://api.twitter.com/1/direct_messages/new.xml";
-        params = [NSMutableDictionary dictionaryWithObjectsAndKeys:tweet, @"text", nil];
-        NSString* name = [self.previewTweet objectForKey:@"screenName"];
-        [params setValue:name forKey:@"screen_name"];
-    }
-    else
-    {
-        params = [NSMutableDictionary dictionaryWithObjectsAndKeys:tweet, @"status", nil];
-        if (NSString* id = [self.previewTweet objectForKey:@"id"])
-            [params setValue:id forKey:@"in_reply_to_status_id"];
+	NSString* url = @"https://api.twitter.com/1/statuses/update.xml";
     
-    }
+	NSMutableDictionary* params = [NSMutableDictionary dictionaryWithObjectsAndKeys:tweet, @"status", nil];
+	if (NSString* id = [self.previewTweet objectForKey:@"id"])
+		[params setValue:id forKey:@"in_reply_to_status_id"];
     
-    NSMutableArray* paramArray = [NSMutableArray arrayWithCapacity:params.count];
+	NSMutableArray* paramArray = [NSMutableArray arrayWithCapacity:params.count];
 	for (id key in params)
 		[paramArray addObject:[NSString stringWithFormat:@"%@=%@", [key encodedURLParameterString], [[params objectForKey:key] encodedURLParameterString]]];
 	NSString* qs = [paramArray componentsJoinedByString:@"&"];
@@ -578,8 +566,6 @@ static UITextView* previewTextView;
 -(void) dismissTweet
 {
     [self.previewTextView resignFirstResponder];
-    previewTextView = nil;
-    [self hideKeyboard]; //!TODO Remove later. Need to hide k/b on tweet dismiss (hide from previewWillDismiss not working)
 	[self.plugin dismissPreview];
 }
 
@@ -592,10 +578,9 @@ static UITextView* previewTextView;
 
 -(void) openButtonPressed
 {
-    NSString* id = [self.previewTweet objectForKey:@"id"];
-    BOOL isDM = ([self.previewTweet objectForKey:@"directMessage"] != nil);
     [self dismissDetailTweet];
-    [self.plugin launchURL: [NSURL URLWithString:[NSString stringWithFormat:@"twitter://%@?id=%@",( isDM ? @"messages" : @"status" ), id]]]; 
+    NSString* id = [self.previewTweet objectForKey:@"id"];
+    [self.plugin launchURL: [NSURL URLWithString:[NSString stringWithFormat:@"twitter://status?id=%@", id]]]; 
     
 }
 
@@ -629,7 +614,6 @@ static UITextView* previewTextView;
     
 	if (self.isViewLoaded)
 	{
-        [self switchToWriteView];
 		if (NSString* name = [self.previewTweet objectForKey:@"screenName"]){
             if(isRetweet){
                 NSString *tweetText = [self.previewTweet objectForKey:@"tweet"];
@@ -641,6 +625,7 @@ static UITextView* previewTextView;
 			self.previewTextView.text = @"";
         
 		[self setCount:140 - self.previewTextView.text.length];
+		[self switchToWriteView];
         [self.previewTextView becomeFirstResponder];
         
 	}
@@ -698,27 +683,17 @@ static UITextView* previewTextView;
     
     UIBarButtonItem *reply = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemReply target:self action:@selector(doReply)];
     UIBarButtonItem *flexspace = [[UIBarButtonItem alloc] initWithBarButtonSystemItem: UIBarButtonSystemItemFlexibleSpace target:nil action:nil];
+    UIImage* img = [UIImage li_imageWithContentsOfResolutionIndependentFile:[self.plugin.bundle pathForResource:@"LITwitterRetweet" ofType:@"png"]];
+    UIBarButtonItem *retweet = [[UIBarButtonItem alloc] initWithImage:img style:UIBarButtonItemStylePlain target:self action:@selector(doRetweet)];
     UIBarButtonItem *open = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemAction target:self action:@selector(openButtonPressed)];
-    UIBarButtonItem *retweet = nil;
     
-    NSArray *buttons = nil;
-    
-    BOOL isDM = ([self.previewTweet objectForKey:@"directMessage"] != nil);
-    if(isDM){
-        
-        buttons = [NSArray arrayWithObjects: reply, flexspace, open, nil];
-        
-    }else{
-        UIImage* img = [UIImage li_imageWithContentsOfResolutionIndependentFile:[self.plugin.bundle pathForResource:@"LITwitterRetweet" ofType:@"png"]];
-        retweet = [[UIBarButtonItem alloc] initWithImage:img style:UIBarButtonItemStylePlain target:self action:@selector(doRetweet)];
-        buttons = [NSArray arrayWithObjects: reply,  flexspace, retweet, flexspace, open, nil];
-    }
+    NSArray *buttons = [NSArray arrayWithObjects: reply,  flexspace, retweet, flexspace, open, nil];
     [self setToolbarItems:buttons];
+    
+    [retweet release];
     [reply release];
     [open release];
     [flexspace release];            
-    if(retweet != nil)
-        [retweet release];
 	return self.previewController.view;
 }
 
@@ -1009,7 +984,7 @@ static UITextView* previewTextView;
 				[cell.contentView addSubview:container];
                 
                 //!TODO localized labels
-                NSArray *segmentTextContent = [NSArray arrayWithObjects: @"Timeline", @"Mentions", @"Messages", @"Compose",  nil];
+                NSArray *segmentTextContent = [NSArray arrayWithObjects: @"Mentions", @"Timeline", @"Messages", @"Compose",  nil];
                 
                 UISegmentedControl *segments = [[[UISegmentedControl alloc] initWithItems:segmentTextContent] autorelease];
                 segments.frame = CGRectMake(-5, 0, tableView.frame.size.width + 10, 24);
@@ -1145,7 +1120,7 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
 	[super dealloc];
 }
 
--(BOOL) loadTweets:(NSString*) url parameters:(NSDictionary*) parameters
+-(void) loadTweets:(NSString*) url parameters:(NSDictionary*) parameters
 {
 	NSString* fullURL = url;
 	if (parameters.count > 0)
@@ -1164,20 +1139,14 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
 	if (!auth.authorized)
 	{
 		NSLog(@"LI:Twitter: Twitter client is not authorized!");
-		return NO;
+		return;
 	}
     
 	NSString* header = [auth OAuthorizationHeader:request.URL method:@"GET" body:nil];
 	[request setValue:header forHTTPHeaderField:@"Authorization"];
-    NSError *anError = nil;
-	NSData* data = [NSURLConnection sendSynchronousRequest:request returningResponse:NULL error:&anError];
     
-    if(data == nil)
-    {
-//        if(error != nil){ //!TODO Better error handling like ReqTimedOut out or host unreachable etc.
-            return NO;
-//        }
-    }
+	NSData* data = [NSURLConnection sendSynchronousRequest:request returningResponse:NULL error:NULL];
+//	NSLog(@"LI:Twitter: Tweet data: %@", [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease]);
 
 	NSXMLParser* parser = [[NSXMLParser alloc] initWithData:data];
 	parser.delegate = self;
@@ -1192,7 +1161,6 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
 	}
     
 	[parser release];
-    return YES;
 }
 
 -(void) updateTweetsInView:(NSMutableArray*) array
@@ -1241,12 +1209,10 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
 	if (showFriends)
 	{
 		self.type = @"friend";
-		if([self loadTweets:@"https://api.twitter.com/statuses/home_timeline.xml" parameters:[NSDictionary dictionaryWithObjectsAndKeys:[NSString stringWithFormat:@"%d", count+1], @"count", nil]])
-        {
-            self.homeline = [self.tempTweets.allValues sortedArrayUsingFunction:sortByDate context:nil];
-            [self.tempTweets removeAllObjects];
-            self.currentTweet = nil;
-        }
+		[self loadTweets:@"https://api.twitter.com/statuses/home_timeline.xml" parameters:[NSDictionary dictionaryWithObjectsAndKeys:[NSString stringWithFormat:@"%d", count+1], @"count", nil]];
+        self.homeline = [self.tempTweets.allValues sortedArrayUsingFunction:sortByDate context:nil];
+        [self.tempTweets removeAllObjects];
+        self.currentTweet = nil;
 	}
     
 	BOOL showMentions = true;
@@ -1256,12 +1222,10 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
 	if (showMentions)
 	{
 		self.type = @"mention";
-        if([self loadTweets:@"https://api.twitter.com/statuses/mentions.xml" parameters:[NSDictionary dictionaryWithObjectsAndKeys:[NSString stringWithFormat:@"%d", count+1], @"count", nil]])
-        {
-            self.mentions = [self.tempTweets.allValues sortedArrayUsingFunction:sortByDate context:nil];
-            [self.tempTweets removeAllObjects];
-            self.currentTweet = nil;
-        }
+		[self loadTweets:@"https://api.twitter.com/statuses/mentions.xml" parameters:[NSDictionary dictionaryWithObjectsAndKeys:[NSString stringWithFormat:@"%d", count+1], @"count", nil]];
+        self.mentions = [self.tempTweets.allValues sortedArrayUsingFunction:sortByDate context:nil];
+        [self.tempTweets removeAllObjects];
+        self.currentTweet = nil;
 	}
     
 	BOOL showDMs = true;
@@ -1271,12 +1235,10 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
 	if (showDMs)
 	{
 		self.type = @"directMessage";
-		if([self loadTweets:@"https://api.twitter.com/1/direct_messages.xml" parameters:[NSDictionary dictionaryWithObjectsAndKeys:[NSString stringWithFormat:@"%d", count+1], @"count", nil]])
-        {
-            self.directMessages = [self.tempTweets.allValues sortedArrayUsingFunction:sortByDate context:nil];
-            [self.tempTweets removeAllObjects];
-            self.currentTweet = nil;
-        }
+		[self loadTweets:@"https://api.twitter.com/1/direct_messages.xml" parameters:[NSDictionary dictionaryWithObjectsAndKeys:[NSString stringWithFormat:@"%d", count+1], @"count", nil]];
+        self.directMessages = [self.tempTweets.allValues sortedArrayUsingFunction:sortByDate context:nil];
+        [self.tempTweets removeAllObjects];
+        self.currentTweet = nil;
 	}
     
     if(selectedIndex == 0)
