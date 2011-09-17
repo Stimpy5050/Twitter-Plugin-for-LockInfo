@@ -666,6 +666,7 @@ static UITextView* previewTextView;
                     self.navigationItem.title = localize(@"Reply");
                     tweetText = [NSString stringWithFormat:@"@%@ %@", name, tweetText];
                     self.previewTextView.text = [self parseTweetTextForReply:tweetText];
+                    self.previewTextView.selectedRange = NSMakeRange([self.previewTextView.text rangeOfString:@" "].location + 1 ,[self.previewTextView.text length]);
                 }
                 
             }
