@@ -305,6 +305,24 @@ static UITextView* previewTextView;
  return YES;
  }
  */
+-(void) previewWillDismiss:(LIPreview*) preview
+{
+    [self.previewTextView resignFirstResponder];
+    [self hideKeyboard];
+}
+-(void) previewDidShow:(LIPreview*) preview
+{
+    if(WRITE_MODE)
+    {
+        [self.previewTextView becomeFirstResponder];
+        [self showKeyboard];
+    }
+    else
+    {
+        [self.previewTextView resignFirstResponder];
+        [self hideKeyboard];
+    }
+}
 
 -(void) showKeyboard
 {
@@ -467,7 +485,9 @@ static UITextView* previewTextView;
         
         NSString *rtscreenName  = [tweet objectForKey:@"rtscreenName"];
         if(!isDM && rtscreenName != nil){
-            rtscreenName = [NSString stringWithFormat:@"Retweeted by <a href='twitter://user?screen_name=%@'>%@</a>",rtscreenName, rtscreenName];
+            NSMutableDictionary *selectedTwitterApp = [plugin.preferences objectForKey:@"SelectedTwitterApp"];
+            NSString *UserViewUrl  = [selectedTwitterApp objectForKey:@"UserViewUrl"];            
+            rtscreenName = [NSString stringWithFormat:@"Retweeted by <a href='%@%@'>%@</a>", UserViewUrl, rtscreenName, rtscreenName];
         }else{
             rtscreenName = @"";
         }
@@ -586,9 +606,12 @@ static UITextView* previewTextView;
 -(void) openButtonPressed
 {
     NSString* id = [self.previewTweet objectForKey:@"id"];
+    NSString* name = [self.previewTweet objectForKey:@"screenName"];
     BOOL isDM = ([self.previewTweet objectForKey:@"directMessage"] != nil);
     [self dismissDetailTweet];
-    [self.plugin launchURL: [NSURL URLWithString:[NSString stringWithFormat:@"twitter://%@?id=%@",( isDM ? @"messages" : @"status" ), id]]]; 
+    NSMutableDictionary *selectedTwitterApp = [plugin.preferences objectForKey:@"SelectedTwitterApp"];
+    NSString *TweetViewUrl  = isDM ? [selectedTwitterApp objectForKey:@"MessageViewUrl"] : [selectedTwitterApp objectForKey:@"TweetViewUrl"];                       
+    [self.plugin launchURL: [NSURL URLWithString:[NSString stringWithFormat:@"%@%@", TweetViewUrl, isDM ? name : id]]]; 
     
 }
 
@@ -623,11 +646,11 @@ static UITextView* previewTextView;
 	if (self.isViewLoaded)
 	{
         [self switchToWriteView];
+        NSString *tweetText = [self.previewTweet objectForKey:@"tweet"];
 		if (NSString* name = [self.previewTweet objectForKey:@"screenName"])
         {
             if(isRetweet)
             {
-                NSString *tweetText = [self.previewTweet objectForKey:@"tweet"];
                 self.previewTextView.text = [NSString stringWithFormat:@"RT @%@ %@", name, tweetText];
             }
             else
@@ -638,7 +661,8 @@ static UITextView* previewTextView;
                     self.previewTextView.text = @"";
                 }
                 else{
-                    self.previewTextView.text = [NSString stringWithFormat:@"@%@ ", name];
+                    NSString *replyText = [self parseTweetTextForReply:tweetText];
+                    self.previewTextView.text = [NSString stringWithFormat:@"@%@ %@", name, [tweetText isEqualToString:replyText] ? @"" : replyText];
                 }
                 
             }
@@ -669,11 +693,14 @@ static UITextView* previewTextView;
     
     NSURL *url = request.URL;
     if ([request.URL.scheme isEqualToString:@"litwitter"]){
+        NSMutableDictionary *selectedTwitterApp = [plugin.preferences objectForKey:@"SelectedTwitterApp"];
         NSString *hashOrUser = [[url absoluteString] substringFromIndex: [@"litwitter://a?o=" length]];
         if([hashOrUser rangeOfString:@"@"].location == 0){
-            url = [NSURL URLWithString:[NSString stringWithFormat:@"twitter://user?screen_name=%@", [hashOrUser encodedURLParameterString]]];
+            NSString *UserViewUrl  = [selectedTwitterApp objectForKey:@"UserViewUrl"];            
+            url = [NSURL URLWithString:[NSString stringWithFormat:@"%@%@", UserViewUrl, [hashOrUser encodedURLParameterString]]];
         }else if([hashOrUser rangeOfString:@"#"].location == 0){
-            url = [NSURL URLWithString:[NSString stringWithFormat:@"http://mobile.twitter.com/searches?q=%@", [hashOrUser encodedURLParameterString]]];
+            NSString *HashSearchUrl  = [selectedTwitterApp objectForKey:@"HashSearchUrl"];            
+            url = [NSURL URLWithString:[NSString stringWithFormat:@"%@%@", HashSearchUrl, [hashOrUser encodedURLParameterString]]];
         }
     }
     [self.plugin launchURL: url];
@@ -742,7 +769,6 @@ static UITextView* previewTextView;
 		useOldRT = n.boolValue;
     if(useOldRT)
     {
-    
         [self.previewController setToolbarHidden:YES];
         [self.plugin showPreview: [self doTweet:self.previewTweet isRetweet:YES]];
         [self switchToWriteView];
@@ -755,18 +781,111 @@ static UITextView* previewTextView;
     
 }
 
+-(NSString *) extractUsersFrom:(NSString *) token tweetText:(NSString *)tweetText
+{
+    if(token == nil)
+    {
+        return @"";      
+    }
+    NSCharacterSet *user = [NSCharacterSet characterSetWithCharactersInString:@"@"];
+    NSCharacterSet *ignoredPunctuationsAndChars = [NSCharacterSet characterSetWithCharactersInString:@"!,:;.?()[]{}/\\`'\"<>#@"] ;
+    int index = NSNotFound;
+    int endIndex = NSNotFound;
+    NSString *nextToken = nil;
+    if((index = [token rangeOfCharacterFromSet:user].location) != NSNotFound)
+    {
+        token = [token substringFromIndex: index];
+        if((endIndex = [[token substringFromIndex:1] rangeOfCharacterFromSet:ignoredPunctuationsAndChars].location) != NSNotFound)
+        {
+            endIndex++;
+            nextToken = [token substringFromIndex:endIndex];
+            token = [token substringToIndex:endIndex];
+        }
+        if([tweetText rangeOfString:token options:NSCaseInsensitiveSearch].location == NSNotFound)
+        {
+            tweetText = [tweetText stringByAppendingString: token];
+            tweetText = [tweetText stringByAppendingString: @" "];
+        }
+        tweetText = [tweetText stringByAppendingString: [self extractUsersFrom: nextToken tweetText: tweetText]];
+        
+    }
+    return tweetText;
+}
+
+
+-(NSString *) detectHashAndUserLinksInToken:(NSString *) token formattedHtml: (NSString *)formattedHtml
+{
+    if(token == nil)
+    {
+        return [formattedHtml stringByAppendingString: @" "];      
+    }
+    NSCharacterSet *hashOrUser = [NSCharacterSet characterSetWithCharactersInString:@"#@"];
+    NSCharacterSet *ignoredPunctuationsAndChars = [NSCharacterSet characterSetWithCharactersInString:@"!,:;.?()[]{}/\\`'\"<>#@"] ;
+    NSString *linkFormat = @"<a href='litwitter://a?o=%@'>%@</a>";
+    
+    int index = NSNotFound;
+    int endIndex = NSNotFound;
+    NSString *nextToken = nil;
+    if((index = [token rangeOfCharacterFromSet:hashOrUser].location) != NSNotFound)
+    {
+        formattedHtml = [formattedHtml stringByAppendingString: [token substringToIndex:index]];
+        token = [token substringFromIndex: index];
+        if((endIndex = [[token substringFromIndex:1] rangeOfCharacterFromSet:ignoredPunctuationsAndChars].location) != NSNotFound)
+        {
+            endIndex++;
+            nextToken = [token substringFromIndex:endIndex];
+            token = [token substringToIndex:endIndex];
+        }
+        formattedHtml = [formattedHtml stringByAppendingString: [NSString stringWithFormat: linkFormat, token, token]];
+        formattedHtml = [self processToken: nextToken formattedHtml: formattedHtml];
+        
+    }else{
+        formattedHtml = [formattedHtml stringByAppendingString: [NSString stringWithFormat: @"%@ ", token]];      
+    }
+    return formattedHtml;
+}
+
+-(NSString *) parseTweetTextForReply:(NSString *) text
+{
+    NSString *replyText = @"";
+    if(NSClassFromString(@"NSRegularExpression") != nil)
+    {
+        NSError *error = NULL;
+        NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:@"[^@]*(@[a-zA-Z0-9_\\-]+)+[^@]*"
+                                                                               options:NSRegularExpressionCaseInsensitive
+                                                                                 error:&error];
+        replyText = [regex stringByReplacingMatchesInString:text
+                                                        options:0
+                                                          range:NSMakeRange(0, [text length])
+                                                   withTemplate:@"$1 "];
+    }
+    return replyText; 
+}
+
 
 -(NSString *) parseTweetText:(NSString *) text
 {
     NSString *formattedHtml = @"";
-    NSError *error = NULL;
-    NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:@"([#@][a-zA-Z0-9_\\-]+)"
-                                                                           options:NSRegularExpressionCaseInsensitive
-                                                                             error:&error];
-    formattedHtml = [regex stringByReplacingMatchesInString:text
-                                                    options:0
-                                                      range:NSMakeRange(0, [text length])
-                                               withTemplate:@"<a href='litwitter://a?o=$1'>$1</a>"];
+    if(NSClassFromString(@"NSRegularExpression") != nil)
+    {
+        NSError *error = NULL;
+        NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:@"([#@][a-zA-Z0-9_\\-]+)"
+                                                                               options:NSRegularExpressionCaseInsensitive
+                                                                                 error:&error];
+        formattedHtml = [regex stringByReplacingMatchesInString:text
+                                                        options:0
+                                                          range:NSMakeRange(0, [text length])
+                                                   withTemplate:@"<a href='litwitter://a?o=$1'>$1</a>"];
+    }
+    else
+    {        
+        NSArray *words = [text componentsSeparatedByString: @" "];
+        for(int i = 0; i < [words count]; i++)
+        {
+            NSString *token = [words objectAtIndex:i];
+            formattedHtml = [self detectHashAndUserLinksInToken: token formattedHtml: formattedHtml];
+        }
+    }
     return formattedHtml; 
     
 }
@@ -1346,6 +1465,7 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
     if(WRITE_MODE)
     {
         WRITE_MODE = NO;
+        [self.previewTextView resignFirstResponder];
         [self hideKeyboard];
     }
 }
