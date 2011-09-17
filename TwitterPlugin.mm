@@ -637,7 +637,7 @@ static UITextView* previewTextView;
 
 -(UIView*) doTweet:(NSDictionary*) tweet isRetweet:(BOOL)isRetweet
 {
-	self.navigationItem.title = localize(@"Twitter");
+	self.navigationItem.title = localize(@"Compose");
 	self.navigationItem.leftBarButtonItem = [[[UIBarButtonItem alloc] initWithTitle:localizeGlobal(@"Cancel") style:UIBarButtonItemStyleBordered target:self action:@selector(dismissTweet)] autorelease];
 	self.navigationItem.rightBarButtonItem = [[[UIBarButtonItem alloc] initWithTitle:localizeGlobal(@"Send") style:UIBarButtonItemStyleDone target:self action:@selector(sendButtonPressed)] autorelease];
     
@@ -658,11 +658,14 @@ static UITextView* previewTextView;
                 BOOL isDM = ([self.previewTweet objectForKey:@"directMessage"] != nil);
                 if(isDM)
                 {
+                    self.navigationItem.title = [NSString stringWithFormat:@"DM @%@", name];
                     self.previewTextView.text = @"";
                 }
-                else{
-                    NSString *replyText = [self parseTweetTextForReply:tweetText];
-                    self.previewTextView.text = [NSString stringWithFormat:@"@%@ %@", name, [tweetText isEqualToString:replyText] ? @"" : replyText];
+                else
+                {
+                    self.navigationItem.title = localize(@"Reply");
+                    tweetText = [NSString stringWithFormat:@"@%@ %@", name, tweetText];
+                    self.previewTextView.text = [self parseTweetTextForReply:tweetText];
                 }
                 
             }
@@ -847,19 +850,18 @@ static UITextView* previewTextView;
 
 -(NSString *) parseTweetTextForReply:(NSString *) text
 {
-    NSString *replyText = @"";
-    if(NSClassFromString(@"NSRegularExpression") != nil)
+    NSString *replyText = @""; 
+    NSArray *words = [text componentsSeparatedByString: @" "];
+    replyText = @"";
+    for(int i = 0; i < [words count]; i++)
     {
-        NSError *error = NULL;
-        NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:@"[^@]*(@[a-zA-Z0-9_\\-]+)+[^@]*"
-                                                                               options:NSRegularExpressionCaseInsensitive
-                                                                                 error:&error];
-        replyText = [regex stringByReplacingMatchesInString:text
-                                                        options:0
-                                                          range:NSMakeRange(0, [text length])
-                                                   withTemplate:@"$1 "];
-    }
-    return replyText; 
+        NSString *token = [[words objectAtIndex:i] stringByAppendingString: @" "];
+        if([token hasPrefix:@"@"] && [replyText rangeOfString: token options:NSCaseInsensitiveSearch].location == NSNotFound)
+        {
+            replyText = [replyText stringByAppendingString: token];
+        }
+    }    
+    return [text isEqualToString:replyText] ? @"" : replyText; 
 }
 
 
@@ -899,11 +901,7 @@ static UITextView* previewTextView;
 
 -(UIView*) tableView:(LITableView*) tableView previewWithFrame:(CGRect) frame forRowAtIndexPath:(NSIndexPath*) indexPath
 {
-	BOOL newTweets = YES;
-	if (NSNumber* n = [self.plugin.preferences objectForKey:@"NewTweets"])
-		newTweets = n.boolValue;
-    
-	int row = indexPath.row - (newTweets ? 1 : 0);
+	int row = indexPath.row - 1;//first row is for tabs
 	if (row < self.tweets.count)
 	{
 		BOOL showPreview = YES;
@@ -1021,14 +1019,10 @@ static UITextView* previewTextView;
 
 - (CGFloat)tableView:(LITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath
 {
-	BOOL newTweets = YES;
-	if (NSNumber* n = [self.plugin.preferences objectForKey:@"NewTweets"])
-		newTweets = n.boolValue;
-    
-	if (newTweets && indexPath.row == 0)
+	if (indexPath.row == 0) //first row is for tabs
 		return 24;
     
-	int row = indexPath.row - (newTweets ? 1 : 0);
+	int row = indexPath.row - 1;
 	if (row >= self.tweets.count)
 		return 0;
     
@@ -1053,11 +1047,7 @@ static UITextView* previewTextView;
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section 
 {
-	BOOL newTweets = YES;
-	if (NSNumber* n = [self.plugin.preferences objectForKey:@"NewTweets"])
-		newTweets = n.boolValue;
-    
-	return [self tableView:tableView numberOfItemsInSection:section] + (newTweets ? 1 : 0);
+	return [self tableView:tableView numberOfItemsInSection:section] + 1;
 }
 -(NSString *) timeToString: (NSNumber *) dateNum
 {
@@ -1120,52 +1110,55 @@ static UITextView* previewTextView;
 
 - (UITableViewCell *)tableView:(LITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath 
 {
-	BOOL newTweets = YES;
-	if (NSNumber* n = [self.plugin.preferences objectForKey:@"NewTweets"])
-		newTweets = n.boolValue;
-    
 	int row = indexPath.row;
-	if (newTweets)
-	{
-		if (row == 0)
-		{
-			UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"NewTweetCell"];
-			if (cell == nil) 
-			{
-				CGRect frame = CGRectMake(0, -1, tableView.frame.size.width, 24);
-				cell = [[[UITableViewCell alloc] initWithFrame:frame reuseIdentifier:@"NewTweetCell"] autorelease];
-                
-				UIImageView* iv = [[[UIImageView alloc] initWithImage:tableView.sectionSubheader] autorelease];
-				iv.autoresizingMask = UIViewAutoresizingFlexibleWidth;
-				iv.frame = frame;
-				[cell.contentView addSubview:iv];
-                
-				UIView* container = [[[UIView alloc] initWithFrame:frame] autorelease];
-				container.backgroundColor = [UIColor clearColor];
-				container.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin;
-				[cell.contentView addSubview:container];
-                
-                //!TODO localized labels
-                NSArray *segmentTextContent = [NSArray arrayWithObjects: @"Timeline", @"Mentions", @"Messages", @"Compose",  nil];
-                
-                UISegmentedControl *segments = [[[UISegmentedControl alloc] initWithItems:segmentTextContent] autorelease];
-                segments.frame = CGRectMake(-5, 0, tableView.frame.size.width + 10, 24);
-                segments.tag = 43443;
-                segments.segmentedControlStyle = UISegmentedControlStyleBezeled;
-                segments.selectedSegmentIndex = selectedIndex;
-                segments.tintColor = [UIColor clearColor];
-                [segments addTarget:self action:@selector(segmentAction:) forControlEvents:UIControlEventValueChanged];
-                segments.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-                [container addSubview:segments];
-			}
+    if (row == 0)
+    {
+        UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"TabsCell"];
+        if (cell == nil) 
+        {
+            CGRect frame = CGRectMake(0, -1, tableView.frame.size.width, 24);
+            cell = [[[UITableViewCell alloc] initWithFrame:frame reuseIdentifier:@"TabsCell"] autorelease];
             
-            UISegmentedControl *segments = [cell viewWithTag:43443];
+            UIImageView* iv = [[[UIImageView alloc] initWithImage:tableView.sectionSubheader] autorelease];
+            iv.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+            iv.frame = frame;
+            [cell.contentView addSubview:iv];
+            
+            UIView* container = [[[UIView alloc] initWithFrame:frame] autorelease];
+            container.backgroundColor = [UIColor clearColor];
+            container.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin;
+            [cell.contentView addSubview:container];
+            
+            //!TODO localized labels
+            NSArray *segmentTextContent = [NSArray arrayWithObjects: @"Timeline", @"Mentions", @"Messages", @"Compose",  nil];
+            UISegmentedControl *segments = [[[UISegmentedControl alloc] initWithItems:segmentTextContent] autorelease];
+            segments.frame = CGRectMake(-5, 0, tableView.frame.size.width + 10, 24);
+            segments.tag = 43443;
+            segments.segmentedControlStyle = UISegmentedControlStyleBezeled;
             segments.selectedSegmentIndex = selectedIndex;
-            
-			return cell;
-		}
-		row--;
-	}
+            segments.tintColor = [UIColor clearColor];
+            [segments addTarget:self action:@selector(segmentAction:) forControlEvents:UIControlEventValueChanged];
+            segments.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+            [container addSubview:segments];
+        }
+        BOOL newTweets = YES;
+        if (NSNumber* n = [self.plugin.preferences objectForKey:@"NewTweets"])
+            newTweets = n.boolValue;
+        UISegmentedControl *segments = [cell viewWithTag:43443];
+        if(newTweets) //update segments based on NewTweets prefs
+        {
+            if(segments.numberOfSegments == 3)
+                [segments insertSegmentWithTitle:@"Compose" atIndex:3 animated:NO];
+        }
+        else if(segments.numberOfSegments == 4)
+        {
+            [segments removeSegmentAtIndex:3 animated: NO];
+        }
+        
+        segments.selectedSegmentIndex = selectedIndex;
+        return cell;
+    }
+    row--;
     
 	UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"TweetCell"];
 	
@@ -1313,9 +1306,7 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
     
     if(data == nil)
     {
-        //        if(error != nil){ //!TODO Better error handling like ReqTimedOut out or host unreachable etc.
         return NO;
-        //        }
     }
     
 	NSXMLParser* parser = [[NSXMLParser alloc] initWithData:data];
@@ -1373,72 +1364,43 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
 	if (NSNumber* n = [self.plugin.preferences objectForKey:@"MaxTweets"])
 		count = n.intValue;
     
-	BOOL showFriends = true;
-    //	if (NSNumber* n = [self.plugin.preferences objectForKey:@"ShowFriends"])
-    //		showFriends = n.boolValue;
-    
-	if (showFriends)
-	{
-		self.type = @"friend";
-		if([self loadTweets:@"https://api.twitter.com/statuses/home_timeline.xml" parameters:[NSDictionary dictionaryWithObjectsAndKeys:[NSString stringWithFormat:@"%d", count+1], @"count", nil]])
-        {
-            self.homeline = [self.tempTweets.allValues sortedArrayUsingFunction:sortByDate context:nil];
-            [self.tempTweets removeAllObjects];
-            self.currentTweet = nil;
-        }
-	}
-    
-	BOOL showMentions = true;
-    //	if (NSNumber* n = [self.plugin.preferences objectForKey:@"ShowMentions"])
-    //		showMentions = n.boolValue;
-    
-	if (showMentions)
-	{
-		self.type = @"mention";
-        if([self loadTweets:@"https://api.twitter.com/statuses/mentions.xml" parameters:[NSDictionary dictionaryWithObjectsAndKeys:[NSString stringWithFormat:@"%d", count+1], @"count", nil]])
-        {
-            self.mentions = [self.tempTweets.allValues sortedArrayUsingFunction:sortByDate context:nil];
-            [self.tempTweets removeAllObjects];
-            self.currentTweet = nil;
-        }
-	}
-    
-	BOOL showDMs = true;
-    //	if (NSNumber* n = [self.plugin.preferences objectForKey:@"ShowDirectMessages"])
-    //		showDMs = n.boolValue;
-    
-	if (showDMs)
-	{
-		self.type = @"directMessage";
-		if([self loadTweets:@"https://api.twitter.com/1/direct_messages.xml" parameters:[NSDictionary dictionaryWithObjectsAndKeys:[NSString stringWithFormat:@"%d", count+1], @"count", nil]])
-        {
-            self.directMessages = [self.tempTweets.allValues sortedArrayUsingFunction:sortByDate context:nil];
-            [self.tempTweets removeAllObjects];
-            self.currentTweet = nil;
-        }
-	}
-    
-    if(selectedIndex == 0)
+    self.type = @"friend";
+    if([self loadTweets:@"https://api.twitter.com/statuses/home_timeline.xml" parameters:[NSDictionary dictionaryWithObjectsAndKeys:[NSString stringWithFormat:@"%d", count+1], @"count", nil]])
     {
-    	[self updateTweetsInView:self.homeline];
+        self.homeline = [self.tempTweets.allValues sortedArrayUsingFunction:sortByDate context:nil];
+        [self.tempTweets removeAllObjects];
+        self.currentTweet = nil;
+        if(selectedIndex == 0) //load the view as soon as data is available
+        {
+            [self updateTweetsInView:self.homeline];
+        }
     }
-    else if(selectedIndex == 1)
+    self.type = @"mention";
+    if([self loadTweets:@"https://api.twitter.com/statuses/mentions.xml" parameters:[NSDictionary dictionaryWithObjectsAndKeys:[NSString stringWithFormat:@"%d", count+1], @"count", nil]])
     {
-    	[self updateTweetsInView:self.mentions];
+        self.mentions = [self.tempTweets.allValues sortedArrayUsingFunction:sortByDate context:nil];
+        [self.tempTweets removeAllObjects];
+        self.currentTweet = nil;
+        if(selectedIndex == 1)
+        {
+            [self updateTweetsInView:self.mentions];
+        }
     }
-    else if(selectedIndex == 2)
+    self.type = @"directMessage";
+    if([self loadTweets:@"https://api.twitter.com/1/direct_messages.xml" parameters:[NSDictionary dictionaryWithObjectsAndKeys:[NSString stringWithFormat:@"%d", count+1], @"count", nil]])
     {
-    	[self updateTweetsInView:self.directMessages];
+        self.directMessages = [self.tempTweets.allValues sortedArrayUsingFunction:sortByDate context:nil];
+        [self.tempTweets removeAllObjects];
+        self.currentTweet = nil;
+        if(selectedIndex == 2)
+        {
+            [self updateTweetsInView:self.directMessages];
+        }
     }
     
-	[self.tempTweets removeAllObjects];
-	self.currentTweet = nil;
-	self.xml = nil;
-	
 	NSTimeInterval refresh = 900;
 	if (NSNumber* n = [self.plugin.preferences objectForKey:@"RefreshInterval"])
 		refresh = n.intValue;
-    
 	nextUpdate = [[NSDate dateWithTimeIntervalSinceNow:refresh] timeIntervalSinceReferenceDate];
 }
 
