@@ -458,7 +458,7 @@ static UITextView* previewTextView;
     [v addSubview:editView];    
 	self.view = v;
     
-    if (NSString* name = [self.previewTweet objectForKey:@"screenName"]){
+    if ([self.previewTweet objectForKey:@"screenName"] != nil){
         [self fillDetailView:self.previewTweet];
         [self switchToReadView];
     }else{
@@ -592,7 +592,8 @@ static UITextView* previewTextView;
 	[request setHTTPBody:body];
     
 	NSError* error;
-	NSData* data = [NSURLConnection sendSynchronousRequest:request returningResponse:NULL error:&error];
+	/*NSData* data = */
+    [NSURLConnection sendSynchronousRequest:request returningResponse:NULL error:&error];
     
 	[[self.newTweetView.superview viewWithTag:575933] removeFromSuperview];
 	self.newTweetView.hidden = NO;
@@ -749,6 +750,10 @@ static UITextView* previewTextView;
         }else if([hashOrUser rangeOfString:@"#"].location == 0){
             [self openInSelectedTwitterApp:TYPE_SEARCH param: hashOrUser];
         }
+    }
+    else
+    {
+        [self.plugin launchURL: url];
     }
 	return NO;
 }
@@ -1381,13 +1386,13 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
 	@try
 	{
 		[parser parse];
+        [parser release];
 	}
 	@catch (id err)
 	{
 		NSLog(@"LI:Twitter: Error loading tweets: %@", err);
+        return NO;
 	}
-    
-	[parser release];
     return YES;
 }
 

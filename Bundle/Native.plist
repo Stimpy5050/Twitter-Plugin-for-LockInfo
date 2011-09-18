@@ -110,7 +110,7 @@
 			<key>key</key>
 			<string>UseDoubleTap</string>
 			<key>label</key>
-			<string>Double-Tap for preview</string>
+			<string>Double-Tap for Preview</string>
 		</dict>
 		<dict>
 			<key>cell</key>
