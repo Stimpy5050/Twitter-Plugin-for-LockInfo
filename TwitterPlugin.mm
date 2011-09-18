@@ -249,8 +249,14 @@ static UIImage* directMessageIcon;
 
 static NSNumber* YES_VALUE = [NSNumber numberWithBool:YES];
 static int selectedIndex = 0;
+static int tapCount = 0;
 static BOOL WRITE_MODE  = YES;
-static NSString * const RT_IDENTIFIER_TEXT = @"_li__tp___rt____id_____";
+static NSString* const RT_IDENTIFIER_TEXT = @"_li__tp___rt____id_____";
+static int const TYPE_STATUS = 0;
+static int const TYPE_PROFILE = 1;
+static int const TYPE_DIRECT_MESSAGE = 2;
+static int const TYPE_SEARCH = 3;
+
 static UITextView* previewTextView;
 #define UIColorFromRGB(rgbValue) [UIColor colorWithRed:((float)((rgbValue & 0xFF0000) >> 16))/255.0 green:((float)((rgbValue & 0xFF00) >> 8))/255.0 blue:((float)(rgbValue & 0xFF))/255.0 alpha:1.0]
 
@@ -381,6 +387,12 @@ static UITextView* previewTextView;
     UIView* readView = [[[UIView alloc] initWithFrame:v.bounds] autorelease];
 	readView.backgroundColor = UIColorFromRGB(0xC5CCd4);
     
+    UIView *header = [[[UIView alloc] initWithFrame:v.bounds] autorelease];
+    UITapGestureRecognizer *tapGesture =
+    [[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(openProfileInSelectedTwitterApp)] autorelease];
+    [header addGestureRecognizer:tapGesture];
+    
+    
     UIImageView* profImg = [[[UIImageView alloc] initWithImage:[self.imageCache objectForKey:@""]] autorelease];
     profImg.frame = CGRectMake(10, 15, 48, 48);
     profImg.tag = 100;
@@ -393,7 +405,7 @@ static UITextView* previewTextView;
     layer.shadowOffset = CGSizeMake(1, 1);
     layer.shadowOpacity = 1;
     layer.shadowRadius = 4.0;
-    [readView addSubview:profImg];
+    [header addSubview:profImg];
     
     UILabel* nameLbl = [[[UILabel alloc] initWithFrame:CGRectMake(70, 10, 250, 48)] autorelease];
     nameLbl.font = [UIFont boldSystemFontOfSize:18];
@@ -404,7 +416,7 @@ static UITextView* previewTextView;
     nameLbl.shadowOffset = CGSizeMake(0, 1.0);
     nameLbl.lineBreakMode = UILineBreakModeTailTruncation;
     nameLbl.tag = 101;
-    [readView addSubview:nameLbl];
+    [header addSubview:nameLbl];
     
     UILabel* screenLbl = [[[UILabel alloc] initWithFrame:CGRectMake(70, 30, 250, 48)] autorelease];
     screenLbl.font = [UIFont systemFontOfSize:14];
@@ -415,7 +427,8 @@ static UITextView* previewTextView;
     screenLbl.shadowOffset = CGSizeMake(0, 1.0);
     screenLbl.lineBreakMode = UILineBreakModeTailTruncation;
     screenLbl.tag = 102;
-    [readView addSubview:screenLbl];
+    [header addSubview:screenLbl];
+    [readView addSubview:header];
     
     UIWebView* webView = [[[UIWebView alloc] initWithFrame:CGRectMake(-1, 75, v.frame.size.width + 1, v.frame.size.height - 75)] autorelease];
     webView.delegate = self;
@@ -485,9 +498,7 @@ static UITextView* previewTextView;
         
         NSString *rtscreenName  = [tweet objectForKey:@"rtscreenName"];
         if(!isDM && rtscreenName != nil){
-            NSMutableDictionary *selectedTwitterApp = [plugin.preferences objectForKey:@"SelectedTwitterApp"];
-            NSString *UserViewUrl  = [selectedTwitterApp objectForKey:@"UserViewUrl"];            
-            rtscreenName = [NSString stringWithFormat:@"Retweeted by <a href='%@%@'>%@</a>", UserViewUrl, rtscreenName, rtscreenName];
+            rtscreenName = [NSString stringWithFormat:@"Retweeted by <a href='%@'>%@</a>", [self buildURLStringForTwitterApp:TYPE_PROFILE param:rtscreenName], rtscreenName];
         }else{
             rtscreenName = @"";
         }
@@ -609,10 +620,10 @@ static UITextView* previewTextView;
     NSString* name = [self.previewTweet objectForKey:@"screenName"];
     BOOL isDM = ([self.previewTweet objectForKey:@"directMessage"] != nil);
     [self dismissDetailTweet];
-    NSMutableDictionary *selectedTwitterApp = [plugin.preferences objectForKey:@"SelectedTwitterApp"];
-    NSString *TweetViewUrl  = isDM ? [selectedTwitterApp objectForKey:@"MessageViewUrl"] : [selectedTwitterApp objectForKey:@"TweetViewUrl"];                       
-    [self.plugin launchURL: [NSURL URLWithString:[NSString stringWithFormat:@"%@%@", TweetViewUrl, isDM ? name : id]]]; 
-    
+    if(isDM)
+        [self openInSelectedTwitterApp: TYPE_DIRECT_MESSAGE  param: name];    
+    else
+        [self openInSelectedTwitterApp: TYPE_STATUS param: id];    
 }
 
 -(void) sendButtonPressed
@@ -693,23 +704,53 @@ static UITextView* previewTextView;
     [self.activity stopAnimating];        
 }
 
+-(NSString *) buildURLStringForTwitterApp: (int) type  param: (NSString *) param
+{
+    NSMutableDictionary *selectedTwitterApp = [plugin.preferences objectForKey:@"SelectedTwitterApp"];
+    NSString *targetUrl = nil;
+    switch (type) {
+        case TYPE_STATUS:
+            targetUrl  = [selectedTwitterApp objectForKey:@"TweetViewUrl"];                       
+            break;
+        case TYPE_PROFILE:
+            targetUrl = [selectedTwitterApp objectForKey:@"UserViewUrl"];                       
+            break;
+        case TYPE_DIRECT_MESSAGE:
+            targetUrl = [selectedTwitterApp objectForKey:@"MessageViewUrl"];                       
+            break;
+        case TYPE_SEARCH:
+            targetUrl = [selectedTwitterApp objectForKey:@"HashSearchUrl"];                       
+            break;
+        default:
+            break;
+    }
+    return [NSString stringWithFormat:@"%@%@", targetUrl, [param encodedURLParameterString]];
+}
+
+-(void) openProfileInSelectedTwitterApp
+{
+    NSString* name = [self.previewTweet objectForKey:@"screenName"];
+    [self openInSelectedTwitterApp:TYPE_PROFILE param:name];
+}
+
+-(void) openInSelectedTwitterApp: (int) type  param: (NSString *) param
+{
+    NSURL *url = [NSURL URLWithString:[self buildURLStringForTwitterApp: type param: param]];
+    [self.plugin launchURL: url];
+}
+
 - (BOOL)webView:(UIWebView*)webView shouldStartLoadWithRequest:(NSURLRequest*)request navigationType:(UIWebViewNavigationType)navigationType {
     
     NSURL *url = request.URL;
     if ([request.URL.scheme isEqualToString:@"litwitter"]){
-        NSMutableDictionary *selectedTwitterApp = [plugin.preferences objectForKey:@"SelectedTwitterApp"];
         NSString *hashOrUser = [[url absoluteString] substringFromIndex: [@"litwitter://a?o=" length]];
         if([hashOrUser rangeOfString:@"@"].location == 0){
-            NSString *UserViewUrl  = [selectedTwitterApp objectForKey:@"UserViewUrl"];            
-            url = [NSURL URLWithString:[NSString stringWithFormat:@"%@%@", UserViewUrl, [hashOrUser encodedURLParameterString]]];
+            [self openInSelectedTwitterApp:TYPE_PROFILE param: hashOrUser];
         }else if([hashOrUser rangeOfString:@"#"].location == 0){
-            NSString *HashSearchUrl  = [selectedTwitterApp objectForKey:@"HashSearchUrl"];            
-            url = [NSURL URLWithString:[NSString stringWithFormat:@"%@%@", HashSearchUrl, [hashOrUser encodedURLParameterString]]];
+            [self openInSelectedTwitterApp:TYPE_SEARCH param: hashOrUser];
         }
     }
-    [self.plugin launchURL: url];
 	return NO;
-    
 }
 
 -(UIView*) showDetailTweet:(NSDictionary*) tweet
@@ -900,6 +941,11 @@ static UITextView* previewTextView;
 	[self.plugin showPreview:v];
 }
 
+-(void) resetTapCount
+{
+    tapCount = 0;
+}
+
 -(UIView*) tableView:(LITableView*) tableView previewWithFrame:(CGRect) frame forRowAtIndexPath:(NSIndexPath*) indexPath
 {
 	int row = indexPath.row - 1;//first row is for tabs
@@ -909,9 +955,28 @@ static UITextView* previewTextView;
 		if (NSNumber* n = [self.plugin.preferences objectForKey:@"ShowPreview"])
 			showPreview = n.boolValue;
         
+        BOOL useDoubleTap = NO;
+		if (NSNumber* n = [self.plugin.preferences objectForKey:@"UseDoubleTap"])
+			useDoubleTap = n.boolValue;
 		if (showPreview){
-            
-            return [self showDetailTweet:[self.tweets objectAtIndex:row]];
+            if(useDoubleTap)
+            {
+                tapCount++;
+                if(tapCount == 2)
+                {
+                    tapCount = 0;
+                    return [self showDetailTweet:[self.tweets objectAtIndex:row]];
+                }
+                else 
+                {
+                    [self performSelector:@selector(resetTapCount) withObject: nil afterDelay: .4];
+                    return nil;
+                }
+            }
+            else
+            {
+                return [self showDetailTweet:[self.tweets objectAtIndex:row]];
+            }
         }
 		else
 			return nil;
