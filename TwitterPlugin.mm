@@ -296,29 +296,47 @@ static int const TYPE_SEARCH = 3;
  return YES;
  }
  */
-- (void)showKeyboard {
-    if (Class peripheral = objc_getClass("UIPeripheralHost")) {
-        [[peripheral sharedInstance] setAutomaticAppearanceEnabled:YES];
-        [[peripheral sharedInstance] orderInAutomatic];
-    }
-    else {
-        [[UIKeyboard automaticKeyboard] orderInWithAnimation:YES];
-    }
+- (void)showKeyboard 
+{
+	if ([self.plugin respondsToSelector:@selector(showKeyboard:)])
+	{
+		[self.plugin showKeyboard:self.previewTextView];
+	}
+	else
+	{
+	    if (Class peripheral = objc_getClass("UIPeripheralHost")) {
+	        [[peripheral sharedInstance] setAutomaticAppearanceEnabled:YES];
+	        [[peripheral sharedInstance] orderInAutomatic];
+	    }
+	    else {
+	        [[UIKeyboard automaticKeyboard] orderInWithAnimation:YES];
+	    }
+	}
 }
 
 - (void)hideKeyboard {
-    if (Class peripheral = objc_getClass("UIPeripheralHost")) {
-        [[peripheral sharedInstance] orderOutAutomatic];
-        [[peripheral sharedInstance] setAutomaticAppearanceEnabled:NO];
-    }
-    else {
-        [[UIKeyboard automaticKeyboard] orderOutWithAnimation:YES];
-    }
+	if ([self.plugin respondsToSelector:@selector(hideKeyboard)])
+	{
+		[self.plugin hideKeyboard];
+	}
+	else
+	{
+	    if (Class peripheral = objc_getClass("UIPeripheralHost")) {
+		[[peripheral sharedInstance] orderOutAutomatic];
+	        [[peripheral sharedInstance] setAutomaticAppearanceEnabled:NO];
+	    }
+	    else {
+       		[[UIKeyboard automaticKeyboard] orderOutWithAnimation:YES];
+    		}
+	}
 }
 
 - (void)previewWillDismiss:(LIPreview *)preview {
-    [self.previewTextView resignFirstResponder];
-    [self hideKeyboard];
+	if (![self.plugin respondsToSelector:@selector(hideKeyboard)])
+	{
+	    [self.previewTextView resignFirstResponder];
+	    [self hideKeyboard];
+	}
 }
 
 - (void)previewDidShow:(LIPreview *)preview {
@@ -362,7 +380,7 @@ static int const TYPE_SEARCH = 3;
 }
 
 - (NSString *)buildURLStringForTwitterApp:(int)urlType  param:(NSString *)param {
-    NSMutableDictionary *selectedTwitterApp = [plugin.preferences objectForKey:@"SelectedTwitterApp"];
+    NSMutableDictionary *selectedTwitterApp = [self.plugin.preferences objectForKey:@"SelectedTwitterApp"];
     NSString *targetUrl = nil;
     switch (urlType) {
         case TYPE_STATUS:
