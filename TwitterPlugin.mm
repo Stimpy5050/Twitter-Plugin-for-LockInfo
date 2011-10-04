@@ -247,7 +247,7 @@ static int const TYPE_SEARCH = 3;
 
 #define UIColorFromRGB(rgbValue) [UIColor colorWithRed:((float)((rgbValue & 0xFF0000) >> 16))/255.0 green:((float)((rgbValue & 0xFF00) >> 8))/255.0 blue:((float)(rgbValue & 0xFF))/255.0 alpha:1.0]
 
-@interface TwitterPlugin : UIViewController <LIPluginController, LITableViewDelegate, UITableViewDataSource, UITextViewDelegate, LIPreviewDelegate, UIWebViewDelegate> {
+@interface TwitterPlugin : UIViewController <LIPluginController, LITableViewDelegate, UITableViewDataSource, UITextViewDelegate, LIPreviewDelegate, UIWebViewDelegate, NSXMLParserDelegate> {
     NSTimeInterval nextUpdate;
     NSDateFormatter *formatter;
     NSConditionLock *lock;
@@ -740,7 +740,7 @@ static int const TYPE_SEARCH = 3;
     NSString *replyText = @"";
     NSArray *words = [text componentsSeparatedByString:@" "];
     replyText = @"";
-    for (int i = 0; i < [words count]; i++) {
+    for (unsigned int i = 0; i < [words count]; i++) {
         NSString *token = [[words objectAtIndex:i] stringByAppendingString:@" "];
         if ([token hasPrefix:@"@"] && [replyText rangeOfString:token options:NSCaseInsensitiveSearch].location == NSNotFound) {
             replyText = [replyText stringByAppendingString:token];
@@ -1054,7 +1054,7 @@ static int const TYPE_SEARCH = 3;
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfItemsInSection:(NSInteger)section {
-    int max = 5;
+    unsigned int max = 5;
     if (NSNumber *n = [self.plugin.preferences objectForKey:@"MaxTweets"])
         max = n.intValue;
 
@@ -1243,7 +1243,6 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
     NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
     [center addObserver:self selector:@selector(update:) name:LITimerNotification object:nil];
     [center addObserver:self selector:@selector(update:) name:LIViewReadyNotification object:nil];
-    [center addObserver:self selector:@selector(screenUndimmed:) name:LIUndimScreenNotification object:nil];
 
 
     //	Class $UIKeyboardImpl = objc_getClass("UIKeyboardImpl");
@@ -1374,15 +1373,6 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
 
     [pool release];
 }
-//Is there screen dim/screen lock notificaion as well?
-- (void)screenUndimmed:(NSNotification *)notif {
-    if (WRITE_MODE) {
-        WRITE_MODE = NO;
-        [self.previewTextView resignFirstResponder];
-        [self hideKeyboard];
-    }
-}
-
 - (void)update:(NSNotification *)notif {
     [self updateTweets:NO];
 }
