@@ -14,6 +14,7 @@
 #include "NSData+Base64.h"
 #include "TwitterAuth.h"
 #include "Plugin.h"
+#import "JSONKit/JSONKit.h"
 
 @interface UIScreen (LIAdditions)
 
@@ -152,7 +153,47 @@ extern "C" CFStringRef UIDateFormatStringForFormatType(CFStringRef type);
 
 static NSString *TWITTER_SERVICE = @"com.ashman.lockinfo.TwitterPlugin";
 
-static NSInteger sortByDate(id obj1, id obj2, void *context) {
+static void prepareObject(id obj1, NSDictionary* imageCache) {
+
+    NSDateFormatter *formatter = [[[NSDateFormatter alloc] init] autorelease];
+    formatter.locale = [[[NSLocale alloc] initWithLocaleIdentifier:@"en_US"] autorelease];
+    formatter.dateFormat = @"EEE MMM dd HH:mm:ss Z yyyy";
+
+    if([obj1 objectForKey:@"sender"] != nil){
+        [obj1 setValue:[obj1 objectForKey:@"sender"] forKey:@"user"];    
+    } 
+    if([obj1 objectForKey:@"retweeted_status"] != nil && [obj1 objectForKey:@"retweeted_by_user"] == nil){
+        
+        [obj1 setValue:[obj1 valueForKeyPath:@"user.name"] forKey:@"retweeted_by_user"];
+        
+        NSDictionary *origTweet = [obj1 valueForKeyPath:@"retweeted_status"];
+        [obj1 setValue:[origTweet objectForKey:@"user"] forKey:@"user"];
+        [obj1 setValue:[origTweet objectForKey:@"id_str"] forKey:@"id_str"];
+        [obj1 setValue:[origTweet objectForKey:@"text"] forKey:@"text"];
+        [obj1 setValue:[origTweet objectForKey:@"source"] forKey:@"source"];
+        
+    }
+    if (NSString *url = [obj1 valueForKeyPath:@"user.profile_image_url"]) {
+        if([imageCache objectForKey: url] == nil){
+            if([imageCache count] >= 50){ //keep only 50 images max in this cache.
+                [imageCache removeObjectForKey:[[imageCache allKeys] lastObject]];
+            }
+            [imageCache setValue:[[[UIImage alloc] initWithData:[NSData dataWithContentsOfURL:[NSURL URLWithString:url]]] autorelease] forKey:url];
+        }
+    }
+    if ([obj1 objectForKey:@"created_at"] != nil) {
+        NSDate *d = [formatter dateFromString:[obj1 objectForKey:@"created_at"]];
+        NSTimeInterval time = [d timeIntervalSince1970];
+        [obj1 setValue:[NSNumber numberWithDouble:time] forKey:@"date"];
+        [obj1 removeObjectForKey:@"created_at"];
+    }
+}
+static NSInteger prepareAndSortByDate(id obj1, id obj2, void *context) {
+    NSMutableDictionary* imageCache = (NSMutableDictionary *) context;
+    
+    prepareObject(obj1, imageCache);
+    prepareObject(obj2, imageCache);
+    
     double d1 = [[obj1 objectForKey:@"date"] doubleValue];
     double d2 = [[obj2 objectForKey:@"date"] doubleValue];
 
@@ -254,18 +295,19 @@ static int const TYPE_SEARCH = 3;
 }
 
 @property(nonatomic, retain) LIPlugin *plugin;
-@property(retain) NSMutableArray *tweets;
-@property(retain) NSMutableArray *homeline;
+@property(retain) NSArray *tweets;
+@property(retain) NSMutableArray *timeline;
 @property(retain) NSMutableArray *mentions;
 @property(retain) NSMutableArray *directMessages;
 @property(retain) NSMutableDictionary *imageCache;
 @property(nonatomic, retain) UINavigationController *previewController;
 @property(nonatomic, retain) UILabel *countLabel;
 
-@property(retain) NSMutableDictionary *tempTweets;
+@property(retain) NSMutableArray *tempTweets;
 @property(retain) NSMutableDictionary *currentTweet;
 @property(retain) NSMutableString *xml;
 @property(retain) NSString *type;
+@property(retain) NSArray *toolbarButtons;
 
 
 @property(nonatomic, retain) UIView *newTweetView;
@@ -284,9 +326,9 @@ static int const TYPE_SEARCH = 3;
 
 @implementation TwitterPlugin
 
-@synthesize tweets, homeline, mentions, directMessages, tempTweets, xml, plugin, imageCache, type, currentTweet, previewController, countLabel;
+@synthesize tweets, timeline, mentions, directMessages, tempTweets, xml, plugin, imageCache, type, currentTweet, previewController, countLabel;
 
-@synthesize previewTweet, previewTextView, newTweetView, webView, editView, readView, activity;
+@synthesize previewTweet, previewTextView, newTweetView, webView, editView, readView, activity, toolbarButtons;
 
 - (void)setCount:(int)count {
     self.countLabel.text = [[NSNumber numberWithInt:count] stringValue];
@@ -296,47 +338,41 @@ static int const TYPE_SEARCH = 3;
  return YES;
  }
  */
-- (void)showKeyboard 
-{
-	if ([self.plugin respondsToSelector:@selector(showKeyboard:)])
-	{
-		[self.plugin showKeyboard:self.previewTextView];
-	}
-	else
-	{
-	    if (Class peripheral = objc_getClass("UIPeripheralHost")) {
-	        [[peripheral sharedInstance] setAutomaticAppearanceEnabled:YES];
-	        [[peripheral sharedInstance] orderInAutomatic];
-	    }
-	    else {
-	        [[UIKeyboard automaticKeyboard] orderInWithAnimation:YES];
-	    }
-	}
+- (void)showKeyboard {
+    if ([self.plugin respondsToSelector:@selector(showKeyboard:)]) {
+        [self.plugin showKeyboard:self.previewTextView];
+    }
+    else {
+        if (Class peripheral = objc_getClass("UIPeripheralHost")) {
+            [[peripheral sharedInstance] setAutomaticAppearanceEnabled:YES];
+            [[peripheral sharedInstance] orderInAutomatic];
+        }
+        else {
+            [[UIKeyboard automaticKeyboard] orderInWithAnimation:YES];
+        }
+    }
 }
 
 - (void)hideKeyboard {
-	if ([self.plugin respondsToSelector:@selector(hideKeyboard)])
-	{
-		[self.plugin hideKeyboard];
-	}
-	else
-	{
-	    if (Class peripheral = objc_getClass("UIPeripheralHost")) {
-		[[peripheral sharedInstance] orderOutAutomatic];
-	        [[peripheral sharedInstance] setAutomaticAppearanceEnabled:NO];
-	    }
-	    else {
-       		[[UIKeyboard automaticKeyboard] orderOutWithAnimation:YES];
-    		}
-	}
+    if ([self.plugin respondsToSelector:@selector(hideKeyboard)]) {
+        [self.plugin hideKeyboard];
+    }
+    else {
+        if (Class peripheral = objc_getClass("UIPeripheralHost")) {
+            [[peripheral sharedInstance] orderOutAutomatic];
+            [[peripheral sharedInstance] setAutomaticAppearanceEnabled:NO];
+        }
+        else {
+            [[UIKeyboard automaticKeyboard] orderOutWithAnimation:YES];
+        }
+    }
 }
 
 - (void)previewWillDismiss:(LIPreview *)preview {
-	if (![self.plugin respondsToSelector:@selector(hideKeyboard)])
-	{
-	    [self.previewTextView resignFirstResponder];
-	    [self hideKeyboard];
-	}
+    if (![self.plugin respondsToSelector:@selector(hideKeyboard)]) {
+        [self.previewTextView resignFirstResponder];
+        [self hideKeyboard];
+    }
 }
 
 - (void)previewDidShow:(LIPreview *)preview {
@@ -352,7 +388,7 @@ static int const TYPE_SEARCH = 3;
 
 - (NSString *)timeToString:(NSNumber *)dateNum {
     NSString *timeString = @"";
-    int diff = 0 - (int)[[NSDate dateWithTimeIntervalSince1970:dateNum.doubleValue] timeIntervalSinceNow];
+    int diff = 0 - (int) [[NSDate dateWithTimeIntervalSince1970:dateNum.doubleValue] timeIntervalSinceNow];
     if (diff > 86400) {
         int n = (int) (diff / 86400);
         timeString = (n == 1 ? @"1 day ago" : [NSString stringWithFormat:localize(@"%d days ago"), n]);
@@ -454,41 +490,40 @@ static int const TYPE_SEARCH = 3;
 
 - (void)fillDetailView:(NSDictionary *)tweet {
 
-    if (NSString *name = [tweet objectForKey:@"name"]) {
-        name = [tweet objectForKey:@"name"];
-        NSString *screenName = [NSString stringWithFormat:@"@%@", [tweet objectForKey:@"screenName"]];
+    if (NSString *name = [tweet valueForKeyPath:@"user.name"]) {
+        NSString *screenName = [NSString stringWithFormat:@"@%@", [tweet valueForKeyPath:@"user.screen_name"]];
 
-        NSString *imageUrl = [tweet objectForKey:@"image"];
+        NSString *imageUrl = [tweet valueForKeyPath:@"user.profile_image_url"];
 
-        UIImageView *profImg = (UIImageView *)[self.readView viewWithTag:100]; //img view
+        UIImageView *profImg = (UIImageView *) [self.readView viewWithTag:100]; //img view
         [profImg setImage:[self.imageCache objectForKey:imageUrl]];
         [profImg setNeedsDisplay];
 
-        UILabel *nameLbl = (UILabel *)[self.readView viewWithTag:101]; //name lbl
+        UILabel *nameLbl = (UILabel *) [self.readView viewWithTag:101]; //name lbl
         nameLbl.text = name;
         [nameLbl setNeedsDisplay];
 
-        UILabel *screenLbl = (UILabel *)[self.readView viewWithTag:102]; //screenname lbl
+        UILabel *screenLbl = (UILabel *) [self.readView viewWithTag:102]; //screenname lbl
         screenLbl.text = screenName;
         [screenLbl setNeedsDisplay];
 
 
-        NSString *tweetText = [tweet objectForKey:@"tweet"];
+        NSString *tweetText = [tweet objectForKey:@"text"];
         NSString *source = [tweet objectForKey:@"source"];
         source = source == nil ? @"" : source;
         NSString *date = [self timeToString:[tweet objectForKey:@"date"]];
 
-        BOOL isDM = ([tweet objectForKey:@"directMessage"] != nil);
+        BOOL isDM = ([tweet objectForKey:@"sender_id"] != nil);
 
-        NSString *rtscreenName = [tweet objectForKey:@"rtscreenName"];
+        NSString *rtscreenName = [tweet objectForKey:@"retweeted_by_user"];
         if (!isDM && rtscreenName != nil) {
             rtscreenName = [NSString stringWithFormat:@"Retweeted by <a href='%@'>%@</a>",
-                            [self buildURLStringForTwitterApp:TYPE_PROFILE param:rtscreenName], rtscreenName];
+                                                      [self buildURLStringForTwitterApp:TYPE_PROFILE param:rtscreenName], rtscreenName];
         } else {
             rtscreenName = @"";
         }
         NSString *html = [NSString stringWithFormat:@"<html><head><style>div{padding:10px;}#time{font-size:small;color:gray;}a{text-decoration:none;color:#3579db;font-weight:bold;}body{font:18px 'Helvetica Neue',Helvetica,sans-serif;}</style></head><body><div id='tweet'>%@</div><div id='time'>%@ &#9679; %@ <br/> %@</div></body></html>",
-                        [self parseTweetText:tweetText], source, date, rtscreenName];
+                                                    [self parseTweetText:tweetText], source, date, rtscreenName];
         [self.webView loadHTMLString:html baseURL:[NSURL URLWithString:@""]];
     }
 
@@ -607,12 +642,12 @@ static int const TYPE_SEARCH = 3;
     self.editView = eView;
     self.readView = rView;
 
-	[self setCount:140 - tv.text.length];
+    [self setCount:140 - tv.text.length];
     [v addSubview:rView];
     [v addSubview:eView];
     self.view = v;
 
-    if ([self.previewTweet objectForKey:@"screenName"] != nil) {
+    if ([self.previewTweet objectForKey:@"id_str"] != nil) {
         [self fillDetailView:self.previewTweet];
         [self switchToReadView];
     } else {
@@ -643,24 +678,24 @@ static int const TYPE_SEARCH = 3;
 - (void)sendTweetInBackground:(NSString *)tweet {
     NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
 
-    BOOL isDM = ([self.previewTweet objectForKey:@"directMessage"] != nil);
+    BOOL isDM = ([self.previewTweet objectForKey:@"sender_id"] != nil);
     NSString *url = @"https://api.twitter.com/1/statuses/update.xml";
     NSMutableDictionary *params = nil;
     if (isDM) {
         url = @"https://api.twitter.com/1/direct_messages/new.xml";
         params = [NSMutableDictionary dictionaryWithObjectsAndKeys:tweet, @"text", nil];
-        NSString *name = [self.previewTweet objectForKey:@"screenName"];
+        NSString *name = [self.previewTweet valueForKeyPath:@"user.screen_name"];
         [params setValue:name forKey:@"screen_name"];
     }
     else if ([tweet isEqualToString:RT_IDENTIFIER_TEXT]) {
-        if (NSString *id = [self.previewTweet objectForKey:@"id"]) {
+        if (NSString *id = [self.previewTweet objectForKey:@"id_str"]) {
             params = [NSMutableDictionary dictionary];
             url = [NSString stringWithFormat:@"https://api.twitter.com/1/statuses/retweet/%@.xml", id];
         }
     }
     else {
         params = [NSMutableDictionary dictionaryWithObjectsAndKeys:tweet, @"status", nil];
-        if (NSString *id = [self.previewTweet objectForKey:@"id"])
+        if (NSString *id = [self.previewTweet objectForKey:@"id_str"])
             [params setValue:id forKey:@"in_reply_to_status_id"];
 
     }
@@ -707,14 +742,14 @@ static int const TYPE_SEARCH = 3;
 }
 
 - (void)openProfileInSelectedTwitterApp {
-    NSString *name = [self.previewTweet objectForKey:@"screenName"];
+    NSString *name = [self.previewTweet valueForKeyPath:@"user.screen_name"];
     [self openInSelectedTwitterApp:TYPE_PROFILE param:name];
 }
 
 - (void)openButtonPressed {
-    NSString *id = [self.previewTweet objectForKey:@"id"];
-    NSString *name = [self.previewTweet objectForKey:@"screenName"];
-    BOOL isDM = ([self.previewTweet objectForKey:@"directMessage"] != nil);
+    NSString *id = [self.previewTweet objectForKey:@"id_str"];
+    NSString *name = [self.previewTweet valueForKeyPath:@"user.screen_name"];
+    BOOL isDM = ([self.previewTweet objectForKey:@"sender_id"] != nil);
     [self dismissDetailTweet];
     if (isDM)
         [self openInSelectedTwitterApp:TYPE_DIRECT_MESSAGE param:name];
@@ -758,13 +793,13 @@ static int const TYPE_SEARCH = 3;
 
     if (self.isViewLoaded) {
         [self switchToWriteView];
-        NSString *tweetText = [self.previewTweet objectForKey:@"tweet"];
-        if (NSString *name = [self.previewTweet objectForKey:@"screenName"]) {
+        NSString *tweetText = [self.previewTweet objectForKey:@"text"];
+        if (NSString *name = [self.previewTweet valueForKeyPath:@"user.screen_name"]) {
             if (isRetweet) {
                 self.previewTextView.text = [NSString stringWithFormat:@"RT @%@ %@", name, tweetText];
             }
             else {
-                BOOL isDM = ([self.previewTweet objectForKey:@"directMessage"] != nil);
+                BOOL isDM = ([self.previewTweet objectForKey:@"sender_id"] != nil);
                 if (isDM) {
                     self.navigationItem.title = [NSString stringWithFormat:@"DM @%@", name];
                     self.previewTextView.text = @"";
@@ -785,9 +820,6 @@ static int const TYPE_SEARCH = 3;
         [self.previewTextView becomeFirstResponder];
 
     }
-    self.previewController = [[[UINavigationController alloc] initWithRootViewController:self] autorelease];
-    UINavigationBar *bar = self.previewController.navigationBar;
-    bar.barStyle = UIBarStyleBlackOpaque;
 
     return self.previewController.view;
 }
@@ -833,37 +865,32 @@ static int const TYPE_SEARCH = 3;
         [self switchToReadView];
         [self fillDetailView:self.previewTweet];
     }
-    self.previewController = [[[UINavigationController alloc] initWithRootViewController:self] autorelease];
-    UINavigationBar *bar = self.previewController.navigationBar;
-    bar.barStyle = UIBarStyleBlackOpaque;
+    NSArray *buttons = self.toolbarButtons;
 
-    UIToolbar *toolbar = [self.previewController toolbar];
-    toolbar.barStyle = UIBarStyleBlackOpaque;
-    [self.previewController setToolbarHidden:NO];
-
-    UIBarButtonItem *reply = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemReply target:self action:@selector(doReply)];
-    UIBarButtonItem *flexspace = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil];
-    UIBarButtonItem *open = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemAction target:self action:@selector(openButtonPressed)];
-    UIBarButtonItem *retweet = nil;
-
-    NSArray *buttons = nil;
-
-    BOOL isDM = ([self.previewTweet objectForKey:@"directMessage"] != nil);
-    if (isDM) {
-
-        buttons = [NSArray arrayWithObjects:reply, flexspace, open, nil];
-
-    } else {
+    if(buttons == nil || [buttons count] <= 0){
+        UIBarButtonItem *reply = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemReply target:self action:@selector(doReply)];
+        UIBarButtonItem *flexspace = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil];
+        UIBarButtonItem *open = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemAction target:self action:@selector(openButtonPressed)];
+        UIBarButtonItem *retweet = nil;
+        
         UIImage *img = [UIImage li_imageWithContentsOfResolutionIndependentFile:[self.plugin.bundle pathForResource:@"LITwitterRetweet" ofType:@"png"]];
         retweet = [[UIBarButtonItem alloc] initWithImage:img style:UIBarButtonItemStylePlain target:self action:@selector(doRetweet)];
         buttons = [NSArray arrayWithObjects:reply, flexspace, retweet, flexspace, open, nil];
+        
+        self.toolbarItems = buttons;
+        self.toolbarButtons = buttons;
+        
+        [reply release];
+        [open release];
+        [flexspace release];
+        if (retweet != nil)
+            [retweet release];
     }
-    [self setToolbarItems:buttons];
-    [reply release];
-    [open release];
-    [flexspace release];
-    if (retweet != nil)
-        [retweet release];
+
+    self.toolbarItems = self.toolbarButtons;     
+    BOOL isDM = ([self.previewTweet objectForKey:@"sender_id"] != nil);
+    [[self.toolbarItems objectAtIndex:2] setEnabled: !isDM];
+    [self.previewController setToolbarHidden:NO];
     return self.previewController.view;
 }
 
@@ -959,82 +986,6 @@ static int const TYPE_SEARCH = 3;
     }
 }
 
-- (void)parser:(NSXMLParser *)parser didStartElement:(NSString *)elementName namespaceURI:(NSString *)namespaceURI qualifiedName:(NSString *)qName attributes:(NSDictionary *)attributeDict {
-    if ([elementName isEqualToString:@"text"] ||
-            [elementName isEqualToString:@"created_at"] ||
-            [elementName isEqualToString:@"profile_image_url"] ||
-            [elementName isEqualToString:@"name"] ||
-            [elementName isEqualToString:@"id"] ||
-            [elementName isEqualToString:@"screen_name"] ||
-            [elementName isEqualToString:@"source"]) {
-        self.xml = [NSMutableString stringWithCapacity:40];
-    }
-    else if ([elementName isEqualToString:@"status"] ||
-            [elementName isEqualToString:@"direct_message"]) {
-        self.currentTweet = [NSMutableDictionary dictionaryWithCapacity:2];
-        [self.currentTweet setValue:YES_VALUE forKey:self.type];
-    }
-}
-
-- (void)parser:(NSXMLParser *)parser didEndElement:(NSString *)elementName namespaceURI:(NSString *)namespaceURI qualifiedName:(NSString *)qName {
-    if ([elementName isEqualToString:@"text"]) {
-        [self.currentTweet setValue:self.xml forKey:@"tweet"];
-    }
-    else if ([elementName isEqualToString:@"source"]) {
-        [self.currentTweet setValue:self.xml forKey:@"source"];
-    }
-    else if ([elementName isEqualToString:@"id"]) {
-        if ([self.currentTweet objectForKey:@"id"] == nil) {
-            [self.currentTweet setValue:self.xml forKey:@"id"];
-            [self.currentTweet setValue:YES_VALUE forKey:self.type];
-
-            if (NSMutableDictionary *t = [self.tempTweets objectForKey:self.xml])
-                [t setValue:YES_VALUE forKey:self.type];
-            else
-                [self.tempTweets setValue:self.currentTweet forKey:self.xml];
-        }
-    }
-    else if ([elementName isEqualToString:@"name"]) {
-        if ([self.currentTweet objectForKey:@"name"] == nil) {
-            [self.currentTweet setValue:self.xml forKey:@"name"];
-        }
-        else if ([self.currentTweet objectForKey:@"rtname"] == nil) {
-            [self.currentTweet setValue:self.xml forKey:@"rtname"];
-        }
-    }
-    else if ([elementName isEqualToString:@"screen_name"]) {
-        if ([self.currentTweet objectForKey:@"screenName"] == nil) {
-            [self.currentTweet setValue:self.xml forKey:@"screenName"];
-        }
-        else if ([self.currentTweet objectForKey:@"rtscreenName"] == nil) {
-            [self.currentTweet setValue:self.xml forKey:@"rtscreenName"];
-        }
-    }
-    else if ([elementName isEqualToString:@"profile_image_url"]) {
-        if ([self.currentTweet objectForKey:@"image"] == nil) {
-            NSString *url = [[self.xml copy] autorelease];
-            if (url) {
-                [self.currentTweet setValue:url forKey:@"image"];
-                [self.imageCache setValue:[[[UIImage alloc] initWithData:[NSData dataWithContentsOfURL:[NSURL URLWithString:url]]] autorelease] forKey:url];
-            }
-        }
-    }
-    else if ([elementName isEqualToString:@"created_at"]) {
-        if ([self.currentTweet objectForKey:@"date"] == nil) {
-            NSDate *d = [formatter dateFromString:self.xml];
-            NSTimeInterval time = [d timeIntervalSince1970];
-            [self.currentTweet setValue:[NSNumber numberWithDouble:time] forKey:@"date"];
-        }
-    }
-
-    self.xml = nil;
-}
-
-- (void)parser:(NSXMLParser *)parser foundCharacters:(NSString *)string {
-    if (self.xml)
-        [self.xml appendString:string];
-}
-
 - (CGFloat)tableView:(LITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath {
     if (indexPath.row == 0) //first row is for tabs
         return 24;
@@ -1044,11 +995,11 @@ static int const TYPE_SEARCH = 3;
         return 0;
 
     NSDictionary *elem = [self.tweets objectAtIndex:row];
-    NSString *text = [elem objectForKey:@"tweet"];
+    NSString *text = [elem objectForKey:@"text"];
 
     text = [@"         " stringByAppendingString:text];
 
-    int width = (int)(tableView.frame.size.width - 10);
+    int width = (int) (tableView.frame.size.width - 10);
     CGSize s = [text sizeWithFont:tableView.theme.detailStyle.font constrainedToSize:CGSizeMake(width, 480) lineBreakMode:UILineBreakModeWordWrap];
     return (s.height + tableView.theme.summaryStyle.font.pointSize + 8);
 }
@@ -1065,13 +1016,13 @@ static int const TYPE_SEARCH = 3;
     return [self tableView:tableView numberOfItemsInSection:section] + 1;
 }
 
-- (void)updateTweetsInView:(NSMutableArray *)array {
+- (void)updateTweetsInView:(NSArray *)array {
     self.tweets = array;
     [self.plugin updateView:[NSDictionary dictionaryWithObjectsAndKeys:self.tweets, @"tweets", nil]];
 }
 
 - (void)switchToHomeline {
-    [self updateTweetsInView:self.homeline];
+    [self updateTweetsInView:self.timeline];
 }
 
 - (void)switchToMentions {
@@ -1140,7 +1091,7 @@ static int const TYPE_SEARCH = 3;
         BOOL newTweets = YES;
         if (NSNumber *n = [self.plugin.preferences objectForKey:@"NewTweets"])
             newTweets = n.boolValue;
-        UISegmentedControl *segments = (UISegmentedControl *)[cell viewWithTag:43443];
+        UISegmentedControl *segments = (UISegmentedControl *) [cell viewWithTag:43443];
         if (newTweets) //update segments based on NewTweets prefs
         {
             if (segments.numberOfSegments == 3)
@@ -1168,7 +1119,7 @@ static int const TYPE_SEARCH = 3;
         [cell.contentView addSubview:v];
     }
 
-    TweetView *v = (TweetView *)[cell.contentView viewWithTag:57];
+    TweetView *v = (TweetView *) [cell.contentView viewWithTag:57];
     v.theme = tableView.theme;
     v.frame = CGRectMake(0, 0, tableView.frame.size.width, [self tableView:tableView heightForRowAtIndexPath:indexPath]);
     v.name = nil;
@@ -1177,14 +1128,14 @@ static int const TYPE_SEARCH = 3;
 
     if (row < self.tweets.count) {
         NSDictionary *elem = [self.tweets objectAtIndex:row];
-        v.tweet = [elem objectForKey:@"tweet"];
+        v.tweet = [elem objectForKey:@"text"];
 
         BOOL screenNames = false;
         if (NSNumber *b = [self.plugin.preferences objectForKey:@"UseScreenNames"])
             screenNames = b.boolValue;
-        v.name = [elem objectForKey:(screenNames ? @"screenName" : @"name")];
-        v.image = [self.imageCache objectForKey:[elem objectForKey:@"image"]];
-        v.directMessage = ([elem objectForKey:@"directMessage"] != nil);
+        v.name = [elem valueForKeyPath:(screenNames ? @"user.screen_name" : @"user.name")];
+        v.image = [self.imageCache objectForKey:[elem valueForKeyPath:@"user.profile_image_url"]];
+        v.directMessage = ([elem objectForKey:@"direct_message"] != nil);
 
         NSNumber *dateNum = [elem objectForKey:@"date"];
         v.time = [self timeToString:dateNum];
@@ -1228,9 +1179,9 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
     self.imageCache = [NSMutableDictionary dictionaryWithCapacity:10];
     self.tweets = [NSMutableArray arrayWithCapacity:10];
     self.mentions = [NSMutableArray arrayWithCapacity:10];
-    self.homeline = [NSMutableArray arrayWithCapacity:10];
+    self.timeline = [NSMutableArray arrayWithCapacity:10];
     self.directMessages = [NSMutableArray arrayWithCapacity:10];
-    self.tempTweets = [NSMutableDictionary dictionaryWithCapacity:20];
+    self.tempTweets = [NSMutableArray arrayWithCapacity:10];//[NSMutableDictionary dictionaryWithCapacity:20];
     lock = [[NSConditionLock alloc] init];
     formatter = [[NSDateFormatter alloc] init];
     formatter.locale = [[[NSLocale alloc] initWithLocaleIdentifier:@"en_US"] autorelease];
@@ -1255,6 +1206,11 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
         [directMessageIcon release];
 
     directMessageIcon = [[UIImage li_imageWithContentsOfResolutionIndependentFile:[self.plugin.bundle pathForResource:@"LITwitterDirectMessage" ofType:@"png"]] retain];
+    self.previewController = [[[UINavigationController alloc] initWithRootViewController:self] autorelease];
+    UINavigationBar *navbar = self.previewController.navigationBar;
+    navbar.barStyle = UIBarStyleBlackOpaque;
+    UIToolbar *toolbar = [self.previewController toolbar];
+    toolbar.barStyle = UIBarStyleBlackOpaque;
 
     return self;
 }
@@ -1292,24 +1248,31 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
     if (data == nil) {
         return NO;
     }
-
-    NSXMLParser *parser = [[NSXMLParser alloc] initWithData:data];
-    parser.delegate = self;
-
-    @try {
-        [parser parse];
-        [parser release];
-    }
-    @catch (id err) {
-        NSLog(@"LI:Twitter: Error loading tweets: %@", err);
+    self.tempTweets = [data mutableObjectFromJSONData];
+    if (self.tempTweets == nil || [self.tempTweets count] <= 0) {
+        NSLog(@"LI:Twitter: Not enough tweets returned since last fetch");
+        NSLog(@"LI:Twitter: RESPONSE: %@", [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease]);
         return NO;
     }
     return YES;
+    
 }
 
+- (NSMutableArray *)_mergeArrays:(NSArray*)from to:(NSMutableArray*)to count:(int)count{
+    if (to != nil && to.count > 0 && from.count < count) {
+        for (NSDictionary *tweet in from) {
+            [to insertObject:tweet atIndex:0];
+            if (to.count > count) {
+                [to removeObjectAtIndex:(to.count - 1)];
+            }
+        }
+    } else {
+        to = from;
+    }
+    return to;
+}
 
-
-- (void)_updateTweets {
+- (void)_updateTweets:(BOOL) force {
     if (SBTelephonyManager * mgr = [$SBTelephonyManager sharedTelephonyManager]) {
         if (mgr.inCall || mgr.incomingCallExists) {
             NSLog(@"LI:Twitter: No data connection available.");
@@ -1324,38 +1287,75 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
         count = n.intValue;
 
     self.type = @"friend";
-    if ([self loadTweets:@"https://api.twitter.com/statuses/home_timeline.xml" parameters:[NSDictionary dictionaryWithObjectsAndKeys:[NSString stringWithFormat:@"%d", count + 1], @"count", nil]]) {
-        self.homeline = [self.tempTweets.allValues sortedArrayUsingFunction:sortByDate context:nil];
+    NSString *sinceId = @"-1";
+    if (!force && self.timeline && [self.timeline count] > 0) {
+        sinceId = [[self.timeline objectAtIndex:0] objectForKey:@"id_str"];
+    }
+    NSArray *fetchedTweets = [NSArray array];
+    NSMutableDictionary *params = [NSMutableDictionary dictionaryWithObjectsAndKeys:[NSString stringWithFormat:@"%d", count], @"count", nil];
+    [params setObject:@"0" forKey:@"include_entities"];
+    [params setObject:@"0" forKey:@"contributor_details"];
+    if (![sinceId isEqualToString:@"-1"]) {
+        [params setObject:sinceId forKey:@"since_id"];
+    }
+    if ([self loadTweets:@"https://api.twitter.com/statuses/home_timeline.json" parameters:params]) {
+        if([self.tempTweets count] == 1) prepareObject([self.tempTweets objectAtIndex:0], self.imageCache);
+        fetchedTweets = [self.tempTweets sortedArrayUsingFunction:prepareAndSortByDate context:self.imageCache];
         [self.tempTweets removeAllObjects];
         self.currentTweet = nil;
-        if (selectedIndex == 0) //load the view as soon as data is available
+        self.timeline = force ? fetchedTweets : [self _mergeArrays:fetchedTweets to:[self.timeline mutableCopy] count:count];
+        if (selectedIndex == 0 && self.timeline.count > 0) //load the view as soon as data is available
         {
-            [self updateTweetsInView:self.homeline];
+            [self updateTweetsInView:self.timeline];
         }
     }
     self.type = @"mention";
-    if ([self loadTweets:@"https://api.twitter.com/statuses/mentions.xml" parameters:[NSDictionary dictionaryWithObjectsAndKeys:[NSString stringWithFormat:@"%d", count + 1], @"count", nil]]) {
-        self.mentions = [self.tempTweets.allValues sortedArrayUsingFunction:sortByDate context:nil];
+    sinceId = @"-1";
+    if (!force && self.mentions && [self.mentions count] > 0) {
+        sinceId = [[self.mentions objectAtIndex:0] objectForKey:@"id_str"];
+    }
+    if (![sinceId isEqualToString:@"-1"]) {
+        [params setObject:sinceId forKey:@"since_id"];
+    } else {
+        [params removeObjectForKey:@"since_id"];
+    }
+    if ([self loadTweets:@"https://api.twitter.com/statuses/mentions.json" parameters:params]) {
+        if([self.tempTweets count] == 1) prepareObject([self.tempTweets objectAtIndex:0], self.imageCache);
+        fetchedTweets = [self.tempTweets sortedArrayUsingFunction:prepareAndSortByDate context:self.imageCache];
         [self.tempTweets removeAllObjects];
         self.currentTweet = nil;
-        if (selectedIndex == 1) {
+        self.mentions = force ? fetchedTweets : [self _mergeArrays:fetchedTweets to:[self.mentions mutableCopy] count:count];
+        if (selectedIndex == 1 && self.mentions.count > 0) {
             [self updateTweetsInView:self.mentions];
         }
     }
     self.type = @"directMessage";
-    if ([self loadTweets:@"https://api.twitter.com/1/direct_messages.xml" parameters:[NSDictionary dictionaryWithObjectsAndKeys:[NSString stringWithFormat:@"%d", count + 1], @"count", nil]]) {
-        self.directMessages = [self.tempTweets.allValues sortedArrayUsingFunction:sortByDate context:nil];
+    sinceId = @"-1";
+    if (!force && self.directMessages && [self.directMessages count] > 0) {
+        sinceId = [[self.directMessages objectAtIndex:0] objectForKey:@"id_str"];
+    }
+    if (![sinceId isEqualToString:@"-1"]) {
+        [params setObject:sinceId forKey:@"since_id"];
+    } else {
+        [params removeObjectForKey:@"since_id"];
+    }
+    if ([self loadTweets:@"https://api.twitter.com/1/direct_messages.json" parameters:params]) {
+        if([self.tempTweets count] == 1) prepareObject([self.tempTweets objectAtIndex:0], self.imageCache);
+        fetchedTweets = [self.tempTweets sortedArrayUsingFunction:prepareAndSortByDate context:self.imageCache];
         [self.tempTweets removeAllObjects];
         self.currentTweet = nil;
-        if (selectedIndex == 2) {
+        self.directMessages = force ? fetchedTweets : [self _mergeArrays:fetchedTweets to:[self.directMessages mutableCopy] count:count];
+        if (selectedIndex == 2 && self.directMessages.count > 0) {
             [self updateTweetsInView:self.directMessages];
         }
     }
 
     NSTimeInterval refresh = 900;
-    if (NSNumber *n = [self.plugin.preferences objectForKey:@"RefreshInterval"])
+    if (NSNumber *n = [self.plugin.preferences objectForKey:@"RefreshInterval"]){
         refresh = n.intValue;
+    }
     nextUpdate = [[NSDate dateWithTimeIntervalSinceNow:refresh] timeIntervalSinceReferenceDate];
+    
 }
 
 - (void)updateTweets:(BOOL)force {
@@ -1366,13 +1366,14 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
 
     if ([lock tryLock]) {
         if (force || nextUpdate < [NSDate timeIntervalSinceReferenceDate])
-            [self _updateTweets];
+            [self _updateTweets: force];
 
         [lock unlock];
     }
 
     [pool release];
 }
+
 - (void)update:(NSNotification *)notif {
     [self updateTweets:NO];
 }
