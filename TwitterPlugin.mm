@@ -153,7 +153,7 @@ extern "C" CFStringRef UIDateFormatStringForFormatType(CFStringRef type);
 
 static NSString *TWITTER_SERVICE = @"com.ashman.lockinfo.TwitterPlugin";
 
-static void prepareObject(id obj1, NSDictionary* imageCache) {
+static void prepareObject(id obj1, NSMutableDictionary* imageCache) {
 
     NSDateFormatter *formatter = [[[NSDateFormatter alloc] init] autorelease];
     formatter.locale = [[[NSLocale alloc] initWithLocaleIdentifier:@"en_US"] autorelease];
@@ -288,7 +288,7 @@ static int const TYPE_SEARCH = 3;
 
 #define UIColorFromRGB(rgbValue) [UIColor colorWithRed:((float)((rgbValue & 0xFF0000) >> 16))/255.0 green:((float)((rgbValue & 0xFF00) >> 8))/255.0 blue:((float)(rgbValue & 0xFF))/255.0 alpha:1.0]
 
-@interface TwitterPlugin : UIViewController <LIPluginController, LITableViewDelegate, UITableViewDataSource, UITextViewDelegate, LIPreviewDelegate, UIWebViewDelegate, NSXMLParserDelegate> {
+@interface TwitterPlugin : UIViewController <LIPluginController, LITableViewDelegate, UITableViewDataSource, UITextViewDelegate, LIPreviewDelegate, UIWebViewDelegate> {
     NSTimeInterval nextUpdate;
     NSDateFormatter *formatter;
     NSConditionLock *lock;
@@ -888,8 +888,10 @@ static int const TYPE_SEARCH = 3;
     }
 
     self.toolbarItems = self.toolbarButtons;     
-    BOOL isDM = ([self.previewTweet objectForKey:@"sender_id"] != nil);
-    [[self.toolbarItems objectAtIndex:2] setEnabled: !isDM];
+    
+    BOOL enableRetweet = ([self.previewTweet objectForKey:@"sender_id"] == nil  //it's not DM &&
+                          && [self.previewTweet objectForKey:@"retweeted"] != YES_VALUE); //not already retweeted
+    [[self.toolbarItems objectAtIndex:2] setEnabled: enableRetweet];
     [self.previewController setToolbarHidden:NO];
     return self.previewController.view;
 }
@@ -1066,18 +1068,12 @@ static int const TYPE_SEARCH = 3;
             CGRect frame = CGRectMake(0, -1, tableView.frame.size.width, 24);
             cell = [[[UITableViewCell alloc] initWithFrame:frame reuseIdentifier:@"TabsCell"] autorelease];
 
-            UIImageView *iv = [[[UIImageView alloc] initWithImage:tableView.sectionSubheader] autorelease];
-            iv.autoresizingMask = UIViewAutoresizingFlexibleWidth;
-            iv.frame = frame;
-            [cell.contentView addSubview:iv];
-
             UIView *container = [[[UIView alloc] initWithFrame:frame] autorelease];
-            container.backgroundColor = [UIColor clearColor];
+            container.backgroundColor = [UIColor colorWithPatternImage:tableView.sectionSubheader];
             container.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin;
             [cell.contentView addSubview:container];
 
-            //!TODO localized labels
-            NSArray *segmentTextContent = [NSArray arrayWithObjects:@"Timeline", @"Mentions", @"Messages", @"Compose", nil];
+            NSArray *segmentTextContent = [NSArray arrayWithObjects:localize(@"Timeline"), localize(@"Mentions"), localize(@"Messages"), localize(@"Compose"), nil];
             UISegmentedControl *segments = [[[UISegmentedControl alloc] initWithItems:segmentTextContent] autorelease];
             segments.frame = CGRectMake(-5, 0, tableView.frame.size.width + 10, 24);
             segments.tag = 43443;
@@ -1095,12 +1091,11 @@ static int const TYPE_SEARCH = 3;
         if (newTweets) //update segments based on NewTweets prefs
         {
             if (segments.numberOfSegments == 3)
-                [segments insertSegmentWithTitle:@"Compose" atIndex:3 animated:NO];
+                [segments insertSegmentWithTitle:localize(@"Compose") atIndex:3 animated:NO];
         }
         else if (segments.numberOfSegments == 4) {
             [segments removeSegmentAtIndex:3 animated:NO];
         }
-
         segments.selectedSegmentIndex = selectedIndex;
         return cell;
     }
@@ -1145,26 +1140,6 @@ static int const TYPE_SEARCH = 3;
     return cell;
 
 }
-/*
- MSHook(void, setDelegate, id self, SEL sel, id delegate)
- {
- if (previewTextView)
- [previewTextView becomeFirstResponder];
- else
- _setDelegate(self, sel, delegate);
- 
- }
- 
- 
- MSHook(BOOL, handleKeyEvent, id self, SEL sel, id event)
- {
- if (previewTextView)
- return NO;
- else
- return _handleKeyEvent(self, sel, event);
- }
- */
-
 static void callInterruptedApp(CFNotificationCenterRef center, void *observer, CFStringRef name, const void *object, CFDictionaryRef userInfo) {
     NSLog(@"LI:Twitter: Call interrupted app");
 }
@@ -1195,13 +1170,6 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
     [center addObserver:self selector:@selector(update:) name:LITimerNotification object:nil];
     [center addObserver:self selector:@selector(update:) name:LIViewReadyNotification object:nil];
 
-
-    //	Class $UIKeyboardImpl = objc_getClass("UIKeyboardImpl");
-    //	Hook(UIKeyboardImpl, setDelegate:, setDelegate);
-
-    //	Class $SBAwayController = objc_getClass("SBAwayController");
-    //	Hook(SBAwayController, handleKeyEvent:, handleKeyEvent);
-
     if (directMessageIcon)
         [directMessageIcon release];
 
@@ -1227,10 +1195,9 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
         NSMutableArray *paramArray = [NSMutableArray arrayWithCapacity:parameters.count];
         for (id key in parameters)
             [paramArray addObject:[NSString stringWithFormat:@"%@=%@", key, [parameters objectForKey:key]]];
-
         fullURL = [fullURL stringByAppendingFormat:@"?%@", [paramArray componentsJoinedByString:@"&"]];
     }
-
+//    NSLog(@"Requesting: %@", fullURL);
     NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:fullURL]];
     request.HTTPMethod = @"GET";
 
@@ -1254,14 +1221,18 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
         NSLog(@"LI:Twitter: RESPONSE: %@", [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease]);
         return NO;
     }
+    NSLog(@"LI:Twitter: returned %d tweets", [self.tempTweets count]);
     return YES;
     
 }
 
-- (NSMutableArray *)_mergeArrays:(NSArray*)from to:(NSMutableArray*)to count:(int)count{
+- (NSMutableArray *)_mergeArrays:(NSMutableArray*)from to:(NSMutableArray*)to count:(int)count{
+    if(from == nil || [from count] < 1) return to;
     if (to != nil && to.count > 0 && from.count < count) {
+        int fromCount = [from count];
+        int startWith = fromCount;
         for (NSDictionary *tweet in from) {
-            [to insertObject:tweet atIndex:0];
+            [to insertObject:tweet atIndex:fromCount-startWith--];
             if (to.count > count) {
                 [to removeObjectAtIndex:(to.count - 1)];
             }
@@ -1285,13 +1256,11 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
     int count = 5;
     if (NSNumber *n = [self.plugin.preferences objectForKey:@"MaxTweets"])
         count = n.intValue;
-
-    self.type = @"friend";
     NSString *sinceId = @"-1";
     if (!force && self.timeline && [self.timeline count] > 0) {
         sinceId = [[self.timeline objectAtIndex:0] objectForKey:@"id_str"];
     }
-    NSArray *fetchedTweets = [NSArray array];
+    NSMutableArray *fetchedTweets = [NSMutableArray array];
     NSMutableDictionary *params = [NSMutableDictionary dictionaryWithObjectsAndKeys:[NSString stringWithFormat:@"%d", count], @"count", nil];
     [params setObject:@"0" forKey:@"include_entities"];
     [params setObject:@"0" forKey:@"contributor_details"];
@@ -1300,16 +1269,15 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
     }
     if ([self loadTweets:@"https://api.twitter.com/statuses/home_timeline.json" parameters:params]) {
         if([self.tempTweets count] == 1) prepareObject([self.tempTweets objectAtIndex:0], self.imageCache);
-        fetchedTweets = [self.tempTweets sortedArrayUsingFunction:prepareAndSortByDate context:self.imageCache];
+        fetchedTweets = [[[self.tempTweets sortedArrayUsingFunction:prepareAndSortByDate context:self.imageCache] mutableCopy] autorelease];
         [self.tempTweets removeAllObjects];
         self.currentTweet = nil;
-        self.timeline = force ? fetchedTweets : [self _mergeArrays:fetchedTweets to:[self.timeline mutableCopy] count:count];
+        self.timeline = force ? fetchedTweets : [self _mergeArrays:fetchedTweets to:self.timeline count:count];
         if (selectedIndex == 0 && self.timeline.count > 0) //load the view as soon as data is available
         {
             [self updateTweetsInView:self.timeline];
         }
     }
-    self.type = @"mention";
     sinceId = @"-1";
     if (!force && self.mentions && [self.mentions count] > 0) {
         sinceId = [[self.mentions objectAtIndex:0] objectForKey:@"id_str"];
@@ -1321,15 +1289,14 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
     }
     if ([self loadTweets:@"https://api.twitter.com/statuses/mentions.json" parameters:params]) {
         if([self.tempTweets count] == 1) prepareObject([self.tempTweets objectAtIndex:0], self.imageCache);
-        fetchedTweets = [self.tempTweets sortedArrayUsingFunction:prepareAndSortByDate context:self.imageCache];
+        fetchedTweets = [[[self.tempTweets sortedArrayUsingFunction:prepareAndSortByDate context:self.imageCache] mutableCopy] autorelease];
         [self.tempTweets removeAllObjects];
         self.currentTweet = nil;
-        self.mentions = force ? fetchedTweets : [self _mergeArrays:fetchedTweets to:[self.mentions mutableCopy] count:count];
+        self.mentions = force ? fetchedTweets : [self _mergeArrays:fetchedTweets to:self.mentions count:count];
         if (selectedIndex == 1 && self.mentions.count > 0) {
             [self updateTweetsInView:self.mentions];
         }
     }
-    self.type = @"directMessage";
     sinceId = @"-1";
     if (!force && self.directMessages && [self.directMessages count] > 0) {
         sinceId = [[self.directMessages objectAtIndex:0] objectForKey:@"id_str"];
@@ -1341,10 +1308,10 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
     }
     if ([self loadTweets:@"https://api.twitter.com/1/direct_messages.json" parameters:params]) {
         if([self.tempTweets count] == 1) prepareObject([self.tempTweets objectAtIndex:0], self.imageCache);
-        fetchedTweets = [self.tempTweets sortedArrayUsingFunction:prepareAndSortByDate context:self.imageCache];
+        fetchedTweets = [[[self.tempTweets sortedArrayUsingFunction:prepareAndSortByDate context:self.imageCache] mutableCopy] autorelease];
         [self.tempTweets removeAllObjects];
         self.currentTweet = nil;
-        self.directMessages = force ? fetchedTweets : [self _mergeArrays:fetchedTweets to:[self.directMessages mutableCopy] count:count];
+        self.directMessages = force ? fetchedTweets : [self _mergeArrays:fetchedTweets to:self.directMessages count:count];
         if (selectedIndex == 2 && self.directMessages.count > 0) {
             [self updateTweetsInView:self.directMessages];
         }
