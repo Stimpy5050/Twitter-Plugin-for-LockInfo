@@ -175,9 +175,6 @@ static void prepareObject(id obj1, NSMutableDictionary* imageCache) {
     }
     if (NSString *url = [obj1 valueForKeyPath:@"user.profile_image_url"]) {
         if([imageCache objectForKey: url] == nil){
-            if([imageCache count] >= 50){ //keep only 50 images max in this cache.
-                [imageCache removeObjectForKey:[[imageCache allKeys] lastObject]];
-            }
             [imageCache setValue:[[[UIImage alloc] initWithData:[NSData dataWithContentsOfURL:[NSURL URLWithString:url]]] autorelease] forKey:url];
         }
     }
@@ -717,7 +714,9 @@ static int const TYPE_SEARCH = 3;
     NSError *error;
     /*NSData* data = */
     [NSURLConnection sendSynchronousRequest:request returningResponse:NULL error:&error];
-
+    if([tweet isEqualToString:RT_IDENTIFIER_TEXT]){ //mark it as retweeted
+        [self.previewTweet setValue:YES_VALUE forKey:@"retweeted"];
+    }
     [[self.newTweetView.superview viewWithTag:575933] removeFromSuperview];
     self.newTweetView.hidden = NO;
 
