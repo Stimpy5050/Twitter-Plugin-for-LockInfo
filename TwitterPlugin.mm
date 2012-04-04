@@ -155,6 +155,8 @@ static NSString *TWITTER_SERVICE = @"com.ashman.lockinfo.TwitterPlugin";
 
 static void prepareObject(id obj1, NSMutableDictionary* imageCache) {
 
+    if([obj1 objectForKey:@"ready"] != nil) return; //Already prepared
+    
     NSDateFormatter *formatter = [[[NSDateFormatter alloc] init] autorelease];
     formatter.locale = [[[NSLocale alloc] initWithLocaleIdentifier:@"en_US"] autorelease];
     formatter.dateFormat = @"EEE MMM dd HH:mm:ss Z yyyy";
@@ -184,6 +186,7 @@ static void prepareObject(id obj1, NSMutableDictionary* imageCache) {
         [obj1 setValue:[NSNumber numberWithDouble:time] forKey:@"date"];
         [obj1 removeObjectForKey:@"created_at"];
     }
+    [obj1 setValue:@"YES" forKey:@"ready"];
 }
 static NSInteger prepareAndSortByDate(id obj1, id obj2, void *context) {
     NSMutableDictionary* imageCache = (NSMutableDictionary *) context;
@@ -258,6 +261,158 @@ static UIImage *directMessageIcon;
 
 @end
 
+@protocol UITweetsTabBarDelegate <NSObject> 
+@optional
+-(void)tabSelected:(id)sender;
+@end
+
+
+@interface UITweetsTabBar : UIView {
+    @private
+    int selectedIdx;
+}
+
+@property(nonatomic, retain) NSArray *titles;
+@property(nonatomic, retain) NSMutableArray *buttons;
+@property(nonatomic, retain) LITheme *theme;
+@property(nonatomic, retain) UIFont *font;
+@property(nonatomic, assign) id <UITweetsTabBarDelegate> delegate;
+
+
+@end
+
+@implementation UITweetsTabBar
+
+@synthesize titles, buttons, theme, font, delegate;
+
+- (void)baseInit {
+    CGRect frame = self.frame;
+    int tabWidth = self.titles.count > 0 ? ((frame.size.width + self.titles.count)/self.titles.count) : 0;
+    self.buttons = [NSMutableArray arrayWithCapacity:self.titles.count];
+    for (int i = 0; i < self.titles.count; i++) {
+        UIButton *button = [[UIButton buttonWithType:UIButtonTypeCustom] autorelease];
+        button.tag = 10 + i;
+        [button setTitle:[self.titles objectAtIndex:i] forState:UIControlStateNormal];
+        [button setTitleColor:self.theme.summaryStyle.textColor forState:UIControlStateNormal];
+        [button setTitleColor:self.theme.headerStyle.textColor forState:UIControlStateHighlighted|UIControlStateSelected];
+        button.frame = CGRectMake(i*tabWidth - 1, 0, tabWidth-0.2, frame.size.height+1); //padding
+        
+        button.layer.borderWidth = 0.5;
+        button.layer.borderColor = [self.theme.headerStyle.shadowColor CGColor];
+        
+        button.titleLabel.font = self.font;
+        [button setBackgroundImage:self.theme.subheaderBackground forState:UIControlStateNormal];
+        [button setBackgroundImage:self.theme.headerBackground forState:UIControlStateHighlighted|UIControlStateSelected];
+        [button addTarget:self action:@selector(buttonPressed:) forControlEvents:UIControlEventTouchUpInside];
+        [self.buttons addObject:button];
+        [self addSubview:button];
+    }
+    selectedIdx = -1; 
+}
+
+- (id)initWithFrame:(CGRect)frame titles: (NSMutableArray*) labels andTheme: (LITheme*) dTheme
+{
+    self = [super initWithFrame:frame];
+    if (self) {
+        self.titles = labels;
+        self.theme = dTheme;
+        self.font = [UIFont boldSystemFontOfSize:12];//theme.detailStyle.font;
+        [self baseInit];
+        [self setFrame:frame];
+    }
+    return self;
+}
+
+- (id)initWithCoder:(NSCoder *)aDecoder {
+    if ((self = [super initWithCoder:aDecoder])) {
+        [self baseInit];
+    }
+    return self;
+}
+
+
+- (id)initWithTitles: (NSMutableArray *)tls {
+    [self baseInit];
+    self.titles = tls;
+    return self;
+}
+-(void) highlightCurrent {
+    UIButton *button = self.buttons.count > selectedIdx ? [self.buttons objectAtIndex:selectedIdx] : nil;
+    if(button){
+        button.highlighted = YES;
+        button.selected = YES;
+        [button setNeedsDisplay];
+    }
+}
+    
+-(void) setSelectionState: (BOOL) state forIndex:(int) index {
+    if(index >= 0){ 
+        UIButton *button = self.buttons.count > index ? [self.buttons objectAtIndex:index] : nil;
+        if(button){
+            button.highlighted = state;
+            button.selected = state;
+            [button setNeedsDisplay];
+        }
+    }
+}
+-(int) getSelectedIndex {
+    return selectedIdx;
+}
+
+-(int) getNumberOfTabs {
+    if(!self.titles) return 0;
+    return self.titles.count;
+}
+
+-(void) setSelectedIndex:(int)index{
+    if(index != selectedIdx){
+        [self setSelectionState:NO forIndex:selectedIdx]; //deslect previous    
+        selectedIdx = index;
+        [self setSelectionState:YES forIndex:selectedIdx]; //select new
+    } else {
+        [self highlightCurrent];
+    }
+}
+- (void)buttonPressed: (id) sender{
+    UIButton *button = (UIButton *)sender;
+    int idx = button.tag - 10; //tag start with 10.
+    if(idx != selectedIdx) [self setSelectedIndex:idx];
+    if(self.delegate){
+        [self.delegate tabSelected:self];
+    }
+    [self performSelector:@selector(highlightCurrent) withObject:nil afterDelay:0.0];
+    [self setNeedsDisplay];
+}
+
+-(void) insertTabWithTitle:(NSString *)title atIndex:(int) index {
+    
+    if(self.titles == nil){
+        self.titles = [NSMutableArray arrayWithCapacity:1];
+    }
+    [self.titles insertObject:title atIndex: index];
+    [self baseInit];
+}
+
+-(void) removeTabAtIndex:(int) index {
+    
+    if(self.titles != nil){
+        [self.titles removeObjectAtIndex: index];
+        [self baseInit];
+    }
+}
+
+
+- (void)dealloc {
+    [self.titles release];
+    [self.font release];
+    [self.buttons release];
+    [super dealloc];
+}
+
+
+@end
+
+
 @interface UIKeyboardImpl : UIView
 @property(nonatomic, retain) id delegate;
 @end
@@ -278,12 +433,15 @@ static int selectedIndex = 0;
 static int tapCount = 0;
 static BOOL WRITE_MODE = YES;
 static NSString *const RT_IDENTIFIER_TEXT = @"_li__tp___rt____id_____";
+static int const MAX_TWEETS_IN_A_VIEW = 60;
 static int const TYPE_STATUS = 0;
 static int const TYPE_PROFILE = 1;
 static int const TYPE_DIRECT_MESSAGE = 2;
 static int const TYPE_SEARCH = 3;
 
-#define UIColorFromRGB(rgbValue) [UIColor colorWithRed:((float)((rgbValue & 0xFF0000) >> 16))/255.0 green:((float)((rgbValue & 0xFF00) >> 8))/255.0 blue:((float)(rgbValue & 0xFF))/255.0 alpha:1.0]
+#define UIColorFromRGB(rgbValue) UIColorFromRGBA(rgbValue, 1.0)
+
+#define UIColorFromRGBA(rgbValue, alphaValue) [UIColor colorWithRed:((float)((rgbValue & 0xFF0000) >> 16))/255.0 green:((float)((rgbValue & 0xFF00) >> 8))/255.0 blue:((float)(rgbValue & 0xFF))/255.0 alpha:alphaValue]
 
 @interface TwitterPlugin : UIViewController <LIPluginController, LITableViewDelegate, UITableViewDataSource, UITextViewDelegate, LIPreviewDelegate, UIWebViewDelegate> {
     NSTimeInterval nextUpdate;
@@ -305,6 +463,8 @@ static int const TYPE_SEARCH = 3;
 @property(retain) NSMutableString *xml;
 @property(retain) NSString *type;
 @property(retain) NSArray *toolbarButtons;
+@property(nonatomic, retain) UIButton *loadMoreButton;
+@property(nonatomic, retain) UIActivityIndicatorView *loadingIndicator;
 
 
 @property(nonatomic, retain) UIView *newTweetView;
@@ -315,6 +475,7 @@ static int const TYPE_SEARCH = 3;
 @property(nonatomic, retain) UIWebView *webView;
 
 @property(nonatomic, retain) UIView *editView;
+@property(nonatomic, retain) UITweetsTabBar *tabbar;
 @property(nonatomic, retain) UIView *readView;
 @property(nonatomic, retain) UIActivityIndicatorView *activity;
 
@@ -325,7 +486,7 @@ static int const TYPE_SEARCH = 3;
 
 @synthesize tweets, timeline, mentions, directMessages, tempTweets, xml, plugin, imageCache, type, currentTweet, previewController, countLabel;
 
-@synthesize previewTweet, previewTextView, newTweetView, webView, editView, readView, activity, toolbarButtons;
+@synthesize previewTweet, previewTextView, newTweetView, webView, editView, readView, activity, toolbarButtons, tabbar, loadMoreButton, loadingIndicator;
 
 - (void)setCount:(int)count {
     self.countLabel.text = [[NSNumber numberWithInt:count] stringValue];
@@ -504,7 +665,6 @@ static int const TYPE_SEARCH = 3;
         screenLbl.text = screenName;
         [screenLbl setNeedsDisplay];
 
-
         NSString *tweetText = [tweet objectForKey:@"text"];
         NSString *source = [tweet objectForKey:@"source"];
         source = source == nil ? @"" : source;
@@ -514,13 +674,11 @@ static int const TYPE_SEARCH = 3;
 
         NSString *rtscreenName = [tweet objectForKey:@"retweeted_by_user"];
         if (!isDM && rtscreenName != nil) {
-            rtscreenName = [NSString stringWithFormat:@"Retweeted by <a href='%@'>%@</a>",
-                                                      [self buildURLStringForTwitterApp:TYPE_PROFILE param:rtscreenName], rtscreenName];
+            rtscreenName = [NSString stringWithFormat:@"Retweeted by <a href='%@'>%@</a>",[self buildURLStringForTwitterApp:TYPE_PROFILE param:rtscreenName], rtscreenName];
         } else {
             rtscreenName = @"";
         }
-        NSString *html = [NSString stringWithFormat:@"<html><head><style>div{padding:10px;}#time{font-size:small;color:gray;}a{text-decoration:none;color:#3579db;font-weight:bold;}body{font:18px 'Helvetica Neue',Helvetica,sans-serif;}</style></head><body><div id='tweet'>%@</div><div id='time'>%@ &#9679; %@ <br/> %@</div></body></html>",
-                                                    [self parseTweetText:tweetText], source, date, rtscreenName];
+        NSString *html = [NSString stringWithFormat:@"<html><head><style>div{padding:10px;}#time{font-size:small;color:gray;}a{text-decoration:none;color:#3579db;font-weight:bold;}body{font:18px 'Helvetica Neue',Helvetica,sans-serif;}</style></head><body><div id='tweet'>%@</div><div id='time'>%@ &#9679; %@ <br/> %@</div></body></html>", [self parseTweetText:tweetText], source, date, rtscreenName];
         [self.webView loadHTMLString:html baseURL:[NSURL URLWithString:@""]];
     }
 
@@ -575,9 +733,8 @@ static int const TYPE_SEARCH = 3;
 
     UIView *header = [[[UIView alloc] initWithFrame:v.bounds] autorelease];
     UITapGestureRecognizer *tapGesture =
-            [[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(openProfileInSelectedTwitterApp)] autorelease];
+    [[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(openProfileInSelectedTwitterApp)] autorelease];
     [header addGestureRecognizer:tapGesture];
-
 
     UIImageView *profImg = [[[UIImageView alloc] initWithImage:[self.imageCache objectForKey:@""]] autorelease];
     profImg.frame = CGRectMake(10, 15, 48, 48);
@@ -954,8 +1111,10 @@ static int const TYPE_SEARCH = 3;
 }
 
 - (UIView *)tableView:(LITableView *)tableView previewWithFrame:(CGRect)frame forRowAtIndexPath:(NSIndexPath *)indexPath {
+    if(indexPath.row <= 0 || indexPath.row == self.tweets.count+1) return nil;
+    
     unsigned int row = indexPath.row - 1;//first row is for tabs
-    if (row < self.tweets.count) {
+    if (row <= self.tweets.count) {
         BOOL showPreview = YES;
         if (NSNumber *n = [self.plugin.preferences objectForKey:@"ShowPreview"])
             showPreview = n.boolValue;
@@ -988,11 +1147,11 @@ static int const TYPE_SEARCH = 3;
 }
 
 - (CGFloat)tableView:(LITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath {
-    if (indexPath.row == 0) //first row is for tabs
-        return 24;
+    if (indexPath.row == 0 || indexPath.row == self.tweets.count+1) //first and last row
+        return 23;//indexPath.row == 0 ? 24 : 34;
 
     unsigned int row = indexPath.row - 1;
-    if (row >= self.tweets.count)
+    if (row > self.tweets.count)
         return 0;
 
     NSDictionary *elem = [self.tweets objectAtIndex:row];
@@ -1006,15 +1165,15 @@ static int const TYPE_SEARCH = 3;
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfItemsInSection:(NSInteger)section {
-    unsigned int max = 5;
-    if (NSNumber *n = [self.plugin.preferences objectForKey:@"MaxTweets"])
-        max = n.intValue;
-
-    return (self.tweets.count > max ? max : self.tweets.count);
+    return (self.tweets.count > MAX_TWEETS_IN_A_VIEW ? MAX_TWEETS_IN_A_VIEW : self.tweets.count);
 }
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-    return [self tableView:tableView numberOfItemsInSection:section] + 1;
+    BOOL loadMoreEnabled = NO;
+    if (NSNumber *n = [self.plugin.preferences objectForKey:@"LoadMore"])
+        loadMoreEnabled = n.boolValue;
+    
+    return [self tableView:tableView numberOfItemsInSection:section] + (loadMoreEnabled ? 2 : 1);
 }
 
 - (void)updateTweetsInView:(NSArray *)array {
@@ -1023,20 +1182,23 @@ static int const TYPE_SEARCH = 3;
 }
 
 - (void)switchToHomeline {
+    selectedIndex = 0;
     [self updateTweetsInView:self.timeline];
 }
 
 - (void)switchToMentions {
+    selectedIndex = 1;
     [self updateTweetsInView:self.mentions];
 }
 
 - (void)switchToMessages {
+    selectedIndex = 2;
     [self updateTweetsInView:self.directMessages];
 }
 
 
-- (void)segmentAction:(id)sender {
-    int selected = [sender selectedSegmentIndex];
+- (void)tabSelected:(id)sender {
+    int selected = [sender getSelectedIndex];
     if (selectedIndex == selected)
         return;
 
@@ -1052,76 +1214,129 @@ static int const TYPE_SEARCH = 3;
             break;
         case 3:
             [self showNewTweet];
-            [sender setSelectedSegmentIndex:selectedIndex];
+            [sender setSelectedIndex:selectedIndex];
             return;
     }
 
     selectedIndex = selected;
 }
 
+-(void) startLoading {
+    self.loadMoreButton.hidden = YES;
+    self.loadMoreButton.enabled = NO;
+    [self.loadingIndicator startAnimating];
+}
+
+-(void) finishLoading {
+    [self.loadingIndicator stopAnimating];
+    self.loadMoreButton.hidden = NO;
+    self.loadMoreButton.enabled = YES;
+}
+
+
+-(void) loadMore {
+    BOOL loading = [self.loadingIndicator isAnimating];
+    if(!loading) {
+        [self startLoading]; //TODO activityIndicator not showing up reliably :(
+        [self performSelectorInBackground:@selector(loadMoreTweets) withObject:nil];
+    } else {
+        [self startLoading];
+    }
+}
+
+-(void) loadMoreTweets{
+    NSString* maxId = [[self.timeline objectAtIndex: self.timeline.count - 1] objectForKey: @"id_str"];
+    NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+    if ([lock tryLock]) {
+        
+        switch (selectedIndex) {
+            case 0:
+                if(self.timeline.count < MAX_TWEETS_IN_A_VIEW) {
+                    maxId = [[self.timeline objectAtIndex: self.timeline.count - 1] objectForKey: @"id_str"];
+                    self.timeline = [self reloadSection:selectedIndex force:NO maxId:maxId];
+                    [self switchToHomeline];
+                }
+                break;
+            case 1:
+                if(self.mentions.count < MAX_TWEETS_IN_A_VIEW) {
+                    maxId = [[self.mentions objectAtIndex: self.mentions.count - 1] objectForKey: @"id_str"];
+                    self.mentions = [self reloadSection:selectedIndex force:NO maxId:maxId];
+                    [self switchToMentions];
+                }
+                break;
+            case 2:
+                if(self.directMessages.count < MAX_TWEETS_IN_A_VIEW) {
+                    maxId = [[self.directMessages objectAtIndex: self.directMessages.count - 1] objectForKey: @"id_str"];
+                    self.directMessages = [self reloadSection:selectedIndex force:NO maxId:maxId];
+                    [self switchToMessages];
+                }
+                break;
+        }
+        
+        [lock unlock];
+        
+    }
+    [self performSelectorOnMainThread:@selector(finishLoading) withObject:nil waitUntilDone:YES];
+    [pool release];
+}
+
 - (UITableViewCell *)tableView:(LITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
     unsigned int row = indexPath.row;
     if (row == 0) {
-        UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"TabsCell"];
+        UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier: @"TabsCell"];
         if (cell == nil) {
-            CGRect frame = CGRectMake(0, -1, tableView.frame.size.width, 24);
+            CGRect frame = CGRectMake(0, -1, tableView.frame.size.width, 23);
             cell = [[[UITableViewCell alloc] initWithFrame:frame reuseIdentifier:@"TabsCell"] autorelease];
+            
+            NSMutableArray *tabbarLabels = [NSMutableArray arrayWithObjects:localize(@"Timeline"), localize(@"Mentions"), localize(@"Messages"), localize(@"Compose"), nil];
 
-            UIView *container = [[[UIView alloc] initWithFrame:frame] autorelease];
-            container.backgroundColor = [UIColor colorWithPatternImage:tableView.sectionSubheader];
-            container.autoresizingMask = UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleRightMargin;
-            [cell.contentView addSubview:container];
-
-            NSArray *segmentTextContent = [NSArray arrayWithObjects:localize(@"Timeline"), localize(@"Mentions"), localize(@"Messages"), localize(@"Compose"), nil];
-            UISegmentedControl *segments = [[[UISegmentedControl alloc] initWithItems:segmentTextContent] autorelease];
-            segments.frame = CGRectMake(-5, 0, tableView.frame.size.width + 10, 24);
-            segments.tag = 43443;
-            segments.segmentedControlStyle = UISegmentedControlStyleBezeled;
-            segments.selectedSegmentIndex = selectedIndex;
-            segments.tintColor = [UIColor clearColor];
-            [segments addTarget:self action:@selector(segmentAction:) forControlEvents:UIControlEventValueChanged];
-            segments.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-            [container addSubview:segments];
+            self.tabbar = [[UITweetsTabBar alloc] initWithFrame:frame titles:tabbarLabels andTheme:tableView.theme];    
+            self.tabbar.delegate = self;
+            self.tabbar.tag = 43443;
+            [cell.contentView addSubview:self.tabbar];
+            [self.tabbar release];
+                       
         }
+
         BOOL newTweets = YES;
         if (NSNumber *n = [self.plugin.preferences objectForKey:@"NewTweets"])
             newTweets = n.boolValue;
-        UISegmentedControl *segments = (UISegmentedControl *) [cell viewWithTag:43443];
+        UITweetsTabBar *tabbar = (UITweetsTabBar *) [cell viewWithTag:43443];
         if (newTweets) //update segments based on NewTweets prefs
         {
-            if (segments.numberOfSegments == 3)
-                [segments insertSegmentWithTitle:localize(@"Compose") atIndex:3 animated:NO];
+            if ([tabbar getNumberOfTabs] == 3)
+                [tabbar insertTabWithTitle:localize(@"Compose") atIndex:3];
         }
-        else if (segments.numberOfSegments == 4) {
-            [segments removeSegmentAtIndex:3 animated:NO];
+        else if ([tabbar getNumberOfTabs] == 4) {
+            [tabbar removTabAtIndex:3];
         }
-        segments.selectedSegmentIndex = selectedIndex;
+        [tabbar setSelectedIndex:selectedIndex];
+        [tabbar setNeedsDisplay];
         return cell;
     }
-    row--;
-
-    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"TweetCell"];
-
-    if (cell == nil) {
-        CGRect frame = CGRectMake(0, 0, tableView.frame.size.width, 24);
-        cell = [[[UITableViewCell alloc] initWithFrame:frame reuseIdentifier:@"TweetCell"] autorelease];
-
-        TweetView *v = [[[TweetView alloc] initWithFrame:frame] autorelease];
-        v.autoresizingMask = UIViewAutoresizingFlexibleWidth;
-        v.backgroundColor = [UIColor clearColor];
-        v.tag = 57;
-        [cell.contentView addSubview:v];
-    }
-
-    TweetView *v = (TweetView *) [cell.contentView viewWithTag:57];
-    v.theme = tableView.theme;
-    v.frame = CGRectMake(0, 0, tableView.frame.size.width, [self tableView:tableView heightForRowAtIndexPath:indexPath]);
-    v.name = nil;
-    v.tweet = nil;
-    v.time = nil;
-
-    if (row < self.tweets.count) {
-        NSDictionary *elem = [self.tweets objectAtIndex:row];
+    //    row--;
+    UITableViewCell *cell = nil;
+    if (row <= self.tweets.count) {
+        cell = [tableView dequeueReusableCellWithIdentifier:@"TweetCell"];
+        
+        if (cell == nil) {
+            CGRect frame = CGRectMake(0, 0, tableView.frame.size.width, 24);
+            cell = [[[UITableViewCell alloc] initWithFrame:frame reuseIdentifier:@"TweetCell"] autorelease];
+            
+            TweetView *v = [[[TweetView alloc] initWithFrame:frame] autorelease];
+            v.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+            v.backgroundColor = [UIColor clearColor];
+            v.tag = 57;
+            [cell.contentView addSubview:v];
+        }
+        
+        TweetView *v = (TweetView *) [cell.contentView viewWithTag:57];
+        v.theme = tableView.theme;
+        v.frame = CGRectMake(0, 0, tableView.frame.size.width, [self tableView:tableView heightForRowAtIndexPath:indexPath]);
+        v.name = nil;
+        v.tweet = nil;
+        v.time = nil;
+        NSDictionary *elem = [self.tweets objectAtIndex:row-1];
         v.tweet = [elem objectForKey:@"text"];
 
         BOOL screenNames = false;
@@ -1133,11 +1348,47 @@ static int const TYPE_SEARCH = 3;
 
         NSNumber *dateNum = [elem objectForKey:@"date"];
         v.time = [self timeToString:dateNum];
+        [v setNeedsDisplay];
+    } else if (row == self.tweets.count+1){ //last row
+        cell = [tableView dequeueReusableCellWithIdentifier:@"LoadMoreCell"];
+        if (cell == nil) {
+            CGRect frame = CGRectMake(0, -1, tableView.frame.size.width, 22);
+            cell = [[[UITableViewCell alloc] initWithFrame:frame reuseIdentifier:@"LoadMoreCell"] autorelease];
+            cell.contentView.backgroundColor = [UIColor colorWithWhite:1.0 alpha:.5];
+        
+            UIButton *button  = [[UIButton buttonWithType:UIButtonTypeCustom] autorelease];
+            button.tag = 43444;
+            
+            [button setTitle:localize(@"Load More Tweets") forState:UIControlStateNormal];
+            [button setTitleColor:[UIColor whiteColor] forState:UIControlStateHighlighted|UIControlStateSelected];
+            
+            button.frame = CGRectMake(0, 0, frame.size.width, frame.size.height);
+            button.titleLabel.font = [UIFont boldSystemFontOfSize:12];
+            
+            [button setBackgroundImage:tableView.theme.subheaderBackground forState:UIControlStateNormal];
+            [button setBackgroundImage:tableView.theme.headerBackground forState:UIControlStateHighlighted];
+            
+            [button addTarget:self action:@selector(loadMore) forControlEvents:UIControlEventTouchUpInside];
+            self.loadMoreButton = button;
+            
+            [cell.contentView addSubview:button];
+            
+            UIActivityIndicatorView *loadingIndicator = [[[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleWhite] autorelease];
+            loadingIndicator.center = CGPointMake(frame.size.width / 2, frame.size.height / 2);
+            loadingIndicator.hidesWhenStopped = YES;
+            loadingIndicator.tag = 43445;
+
+            self.loadingIndicator = loadingIndicator;
+            
+            [cell.contentView insertSubview:loadingIndicator belowSubview:self.loadMoreButton];
+
+            
+        }
+        [self.loadingIndicator setNeedsDisplay];
+        [self.loadMoreButton setNeedsDisplay];
+        
     }
-
-    [v setNeedsDisplay];
     return cell;
-
 }
 static void callInterruptedApp(CFNotificationCenterRef center, void *observer, CFStringRef name, const void *object, CFDictionaryRef userInfo) {
     NSLog(@"LI:Twitter: Call interrupted app");
@@ -1185,6 +1436,7 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
 - (void)dealloc {
     [formatter release];
     [lock release];
+    [self.tabbar release];
     [super dealloc];
 }
 
@@ -1196,7 +1448,7 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
             [paramArray addObject:[NSString stringWithFormat:@"%@=%@", key, [parameters objectForKey:key]]];
         fullURL = [fullURL stringByAppendingFormat:@"?%@", [paramArray componentsJoinedByString:@"&"]];
     }
-//    NSLog(@"Requesting: %@", fullURL);
+    NSLog(@"Requesting: %@", fullURL);
     NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:fullURL]];
     request.HTTPMethod = @"GET";
 
@@ -1216,30 +1468,95 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
     }
     self.tempTweets = [data mutableObjectFromJSONData];
     if (self.tempTweets == nil || [self.tempTweets count] <= 0) {
-        NSLog(@"LI:Twitter: Not enough tweets returned since last fetch");
-        NSLog(@"LI:Twitter: RESPONSE: %@", [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease]);
+        NSLog(@"LI:Twitter: No more new tweets since last fetch");
         return NO;
     }
+    if([self.tempTweets isKindOfClass:[NSDictionary class]]){
+        NSLog(@"LI:Twitter: Invalid RESPONSE: %@", [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease]);
+        return NO;
+    }
+
     NSLog(@"LI:Twitter: returned %d tweets", [self.tempTweets count]);
     return YES;
     
 }
-
-- (NSMutableArray *)_mergeArrays:(NSMutableArray*)from to:(NSMutableArray*)to count:(int)count{
-    if(from == nil || [from count] < 1) return to;
-    if (to != nil && to.count > 0 && from.count < count) {
-        int fromCount = [from count];
-        int startWith = fromCount;
-        for (NSDictionary *tweet in from) {
-            [to insertObject:tweet atIndex:fromCount-startWith--];
-            if (to.count > count) {
-                [to removeObjectAtIndex:(to.count - 1)];
-            }
-        }
+- (NSMutableArray *)_mergeArrays:(NSMutableArray*)from to:(NSMutableArray*)to count:(int)count append: (BOOL) append{
+    if(from == nil || from.count < 1) return to;
+    if(append){
+        to = [to arrayByAddingObjectsFromArray:[from subarrayWithRange:NSMakeRange(1, from.count)]]; //exclude first: duplicate
     } else {
-        to = from;
+        to = [from arrayByAddingObjectsFromArray: to];
+        if(to.count > count){
+            to = [to subarrayWithRange:NSMakeRange(0, count)];
+        }
     }
     return to;
+}
+- (NSMutableArray*)reloadSection: (int) sectionNumber force: (BOOL) force {
+    return [self reloadSection:sectionNumber force:force maxId:nil];
+}
+- (NSMutableArray*)reloadSection: (int) sectionNumber force: (BOOL) force maxId: (NSString *)maxId{
+    
+    NSString *sectionURL = @"https://api.twitter.com/statuses/home_timeline.json";
+    int count = 5;
+    if (NSNumber *n = [self.plugin.preferences objectForKey:@"MaxTweets"])
+        count = n.intValue;
+    NSString *sinceId = @"-1"; 
+    
+    NSMutableArray *fetchedTweets = [NSMutableArray array];
+    NSMutableDictionary *params = [NSMutableDictionary dictionaryWithObjectsAndKeys:[NSString stringWithFormat:@"%d", count], @"count", nil];
+    [params setObject:@"0" forKey:@"include_entities"];
+    [params setObject:@"0" forKey:@"contributor_details"];
+    
+    
+    NSMutableArray *targetStorage = self.timeline;
+    switch (sectionNumber) {
+        case 0:
+            sectionURL = @"https://api.twitter.com/statuses/home_timeline.json";
+            targetStorage = self.timeline;
+            NSLog(@"LI:Twitter: Loading TIMELINE...");
+            break;
+        case 1:
+            sectionURL = @"https://api.twitter.com/statuses/mentions.json";
+            targetStorage = self.mentions;
+            NSLog(@"LI:Twitter: Loading MENTIONS...");
+            break;
+        case 2:
+            sectionURL = @"https://api.twitter.com/1/direct_messages.json";
+            targetStorage = self.directMessages;
+            NSLog(@"LI:Twitter: Loading DIRECT_MESSAGES...");
+            break;
+    }
+    BOOL append = NO;
+    if(maxId != nil) {
+        [params setObject:maxId forKey:@"max_id"];
+        [params setObject:[NSString stringWithFormat:@"%d", count+1] forKey:@"count"]; //we gonna get one duplicate so +1
+        append = YES;
+    } else if (!force && targetStorage && [targetStorage count] > 0) {
+        sinceId = [[targetStorage objectAtIndex: 0] objectForKey: @"id_str"];
+        if (![sinceId isEqualToString: @"-1"]) {
+            [params setObject:sinceId forKey:@"since_id"];
+        }
+    }
+    
+    if ([self loadTweets:sectionURL parameters:params]) {
+        if([self.tempTweets count] == 1) {
+            prepareObject([self.tempTweets objectAtIndex:0], self.imageCache);
+        }
+        fetchedTweets = [[[self.tempTweets sortedArrayUsingFunction:prepareAndSortByDate context:self.imageCache] mutableCopy] autorelease];
+        
+        [self.tempTweets removeAllObjects];
+        
+        self.currentTweet = nil;
+        
+        targetStorage = force ? fetchedTweets : [self _mergeArrays:fetchedTweets to:targetStorage count:count append:append];
+        
+        if (selectedIndex == sectionNumber && targetStorage.count > 0) //load the view as soon as data is available
+        {
+            [self updateTweetsInView:targetStorage];
+        }
+    }
+    return targetStorage;
 }
 
 - (void)_updateTweets:(BOOL) force {
@@ -1249,73 +1566,11 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
             return;
         }
     }
-
-    NSLog(@"LI:Twitter: Loading tweets...");
-
-    int count = 5;
-    if (NSNumber *n = [self.plugin.preferences objectForKey:@"MaxTweets"])
-        count = n.intValue;
-    NSString *sinceId = @"-1";
-    if (!force && self.timeline && [self.timeline count] > 0) {
-        sinceId = [[self.timeline objectAtIndex:0] objectForKey:@"id_str"];
-    }
-    NSMutableArray *fetchedTweets = [NSMutableArray array];
-    NSMutableDictionary *params = [NSMutableDictionary dictionaryWithObjectsAndKeys:[NSString stringWithFormat:@"%d", count], @"count", nil];
-    [params setObject:@"0" forKey:@"include_entities"];
-    [params setObject:@"0" forKey:@"contributor_details"];
-    if (![sinceId isEqualToString:@"-1"]) {
-        [params setObject:sinceId forKey:@"since_id"];
-    }
-    if ([self loadTweets:@"https://api.twitter.com/statuses/home_timeline.json" parameters:params]) {
-        if([self.tempTweets count] == 1) prepareObject([self.tempTweets objectAtIndex:0], self.imageCache);
-        fetchedTweets = [[[self.tempTweets sortedArrayUsingFunction:prepareAndSortByDate context:self.imageCache] mutableCopy] autorelease];
-        [self.tempTweets removeAllObjects];
-        self.currentTweet = nil;
-        self.timeline = force ? fetchedTweets : [self _mergeArrays:fetchedTweets to:self.timeline count:count];
-        if (selectedIndex == 0 && self.timeline.count > 0) //load the view as soon as data is available
-        {
-            [self updateTweetsInView:self.timeline];
-        }
-    }
-    sinceId = @"-1";
-    if (!force && self.mentions && [self.mentions count] > 0) {
-        sinceId = [[self.mentions objectAtIndex:0] objectForKey:@"id_str"];
-    }
-    if (![sinceId isEqualToString:@"-1"]) {
-        [params setObject:sinceId forKey:@"since_id"];
-    } else {
-        [params removeObjectForKey:@"since_id"];
-    }
-    if ([self loadTweets:@"https://api.twitter.com/statuses/mentions.json" parameters:params]) {
-        if([self.tempTweets count] == 1) prepareObject([self.tempTweets objectAtIndex:0], self.imageCache);
-        fetchedTweets = [[[self.tempTweets sortedArrayUsingFunction:prepareAndSortByDate context:self.imageCache] mutableCopy] autorelease];
-        [self.tempTweets removeAllObjects];
-        self.currentTweet = nil;
-        self.mentions = force ? fetchedTweets : [self _mergeArrays:fetchedTweets to:self.mentions count:count];
-        if (selectedIndex == 1 && self.mentions.count > 0) {
-            [self updateTweetsInView:self.mentions];
-        }
-    }
-    sinceId = @"-1";
-    if (!force && self.directMessages && [self.directMessages count] > 0) {
-        sinceId = [[self.directMessages objectAtIndex:0] objectForKey:@"id_str"];
-    }
-    if (![sinceId isEqualToString:@"-1"]) {
-        [params setObject:sinceId forKey:@"since_id"];
-    } else {
-        [params removeObjectForKey:@"since_id"];
-    }
-    if ([self loadTweets:@"https://api.twitter.com/1/direct_messages.json" parameters:params]) {
-        if([self.tempTweets count] == 1) prepareObject([self.tempTweets objectAtIndex:0], self.imageCache);
-        fetchedTweets = [[[self.tempTweets sortedArrayUsingFunction:prepareAndSortByDate context:self.imageCache] mutableCopy] autorelease];
-        [self.tempTweets removeAllObjects];
-        self.currentTweet = nil;
-        self.directMessages = force ? fetchedTweets : [self _mergeArrays:fetchedTweets to:self.directMessages count:count];
-        if (selectedIndex == 2 && self.directMessages.count > 0) {
-            [self updateTweetsInView:self.directMessages];
-        }
-    }
-
+    
+    self.timeline = [self reloadSection:0 force:force];
+    self.mentions = [self reloadSection:1 force:force];
+    self.directMessages = [self reloadSection:2 force:force];
+    
     NSTimeInterval refresh = 900;
     if (NSNumber *n = [self.plugin.preferences objectForKey:@"RefreshInterval"]){
         refresh = n.intValue;

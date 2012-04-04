@@ -151,6 +151,8 @@
                                 <string>Tweetbot</string>
                                 <string>Twitterrific</string>
                                 <string>Seesmic</string>
+                                <string>Echofon</string>
+                                <string>EchofonPro</string>                                
                         </array>
                         <key>validValues</key>
                         <array>
@@ -210,9 +212,37 @@
 								<key>MessageViewUrl</key>
 								<string>x-seesmic://twitter_messages?twitter_screen_name=</string>
 							</dict>
+							<dict>
+								<key>Name</key>
+								<string>Echofon</string>
+								<key>UrlPrefix</key>
+								<string>echofon://</string>
+								<key>HashSearchUrl</key>
+								<string>echofon://search?query=</string>
+								<key>TweetViewUrl</key>
+								<string>echofon://status?id=</string>
+								<key>UserViewUrl</key>
+								<string>echofon://profile?screen_name=</string>
+								<key>MessageViewUrl</key>
+								<string>echofon://messages?screen_name=</string>
+							</dict>
+							<dict>
+								<key>Name</key>
+								<string>EchofonPro</string>
+								<key>UrlPrefix</key>
+								<string>echofonpro://</string>
+								<key>HashSearchUrl</key>
+								<string>echofonpro://search?query=</string>
+								<key>TweetViewUrl</key>
+								<string>echofonpro://status?id=</string>
+								<key>UserViewUrl</key>
+								<string>echofonpro://profile?screen_name=</string>
+								<key>MessageViewUrl</key>
+								<string>echofonpro://messages?screen_name=</string>
+							</dict>
                         </array>
 						<key>staticTextMessage</key>
-						<string>You must have the application you select installed on your device to use it to open profiles or tweets.</string>
+						<string>You must have the application you select installed on your device to use it with this plugin. Also note that some apps may not have proper support to directly launch corresponding status, profile or message.</string>
 			    </dict>
         </array>
 	<key>title</key>

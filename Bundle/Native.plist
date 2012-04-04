@@ -132,6 +132,18 @@
 			<key>defaults</key>
 			<string>com.ashman.lockinfo.TwitterPlugin</string>
 			<key>key</key>
+			<string>LoadMore</string>
+			<key>label</key>
+			<string>Enable Load More</string>
+		</dict>
+		<dict>
+			<key>cell</key>
+			<string>PSSwitchCell</string>
+			<key>default</key>
+			<false/>
+			<key>defaults</key>
+			<string>com.ashman.lockinfo.TwitterPlugin</string>
+			<key>key</key>
 			<string>Collapsed</string>
 			<key>label</key>
 			<string>Collapsed on Respring</string>
