@@ -1483,7 +1483,7 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
 - (NSMutableArray *)_mergeArrays:(NSMutableArray*)from to:(NSMutableArray*)to count:(int)count append: (BOOL) append{
     if(from == nil || from.count < 1) return to;
     if(append){
-        to = [to arrayByAddingObjectsFromArray:[from subarrayWithRange:NSMakeRange(1, from.count)]]; //exclude first: duplicate
+        to = [to arrayByAddingObjectsFromArray:[from subarrayWithRange:NSMakeRange(1, from.count-1)]]; //exclude first: duplicate
     } else {
         to = [from arrayByAddingObjectsFromArray: to];
         if(to.count > count){
