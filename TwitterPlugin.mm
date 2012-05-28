@@ -1033,7 +1033,6 @@ static int const TYPE_SEARCH = 3;
         retweet = [[UIBarButtonItem alloc] initWithImage:img style:UIBarButtonItemStylePlain target:self action:@selector(doRetweet)];
         buttons = [NSArray arrayWithObjects:reply, flexspace, retweet, flexspace, open, nil];
         
-        self.toolbarItems = buttons;
         self.toolbarButtons = buttons;
         
         [reply release];
@@ -1043,11 +1042,9 @@ static int const TYPE_SEARCH = 3;
             [retweet release];
     }
 
-    self.toolbarItems = self.toolbarButtons;     
-    
     BOOL enableRetweet = ([self.previewTweet objectForKey:@"sender_id"] == nil  //it's not DM &&
                           && [self.previewTweet objectForKey:@"retweeted"] != YES_VALUE); //not already retweeted
-    [[self.toolbarItems objectAtIndex:2] setEnabled: enableRetweet];
+    [[self.toolbarButtons objectAtIndex:2] setEnabled: enableRetweet];
     [self.previewController setToolbarHidden:NO];
     return self.previewController.view;
 }
