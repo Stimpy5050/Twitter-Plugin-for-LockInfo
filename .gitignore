@@ -4,3 +4,9 @@
 _
 obj
 theos
+.DS_Store
+JSONKit/*
+Plugin.h
+TwitterAuthSecrets.h
+TwitterPlugin/*
+TwitterPlugin/**
