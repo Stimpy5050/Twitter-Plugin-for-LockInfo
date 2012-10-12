@@ -14,7 +14,7 @@
 #include "NSData+Base64.h"
 #include "TwitterAuth.h"
 #include "Plugin.h"
-#import "JSONKit/JSONKit.h"
+#import "JSONKit.h"
 
 @interface UIScreen (LIAdditions)
 
@@ -445,6 +445,8 @@ static int const TYPE_PROFILE = 1;
 static int const TYPE_DIRECT_MESSAGE = 2;
 static int const TYPE_SEARCH = 3;
 
+static NSString *const API_URL = @"https://api.twitter.com/1.1";
+
 #define UIColorFromRGB(rgbValue) UIColorFromRGBA(rgbValue, 1.0)
 
 #define UIColorFromRGBA(rgbValue, alphaValue) [UIColor colorWithRed:((float)((rgbValue & 0xFF0000) >> 16))/255.0 green:((float)((rgbValue & 0xFF00) >> 8))/255.0 blue:((float)(rgbValue & 0xFF))/255.0 alpha:alphaValue]
@@ -839,25 +841,26 @@ static int const TYPE_SEARCH = 3;
     NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
 
     BOOL isDM = ([self.previewTweet objectForKey:@"sender_id"] != nil);
-    NSString *url = @"https://api.twitter.com/1/statuses/update.xml";
-    NSMutableDictionary *params = nil;
+    NSString *url = [API_URL stringByAppendingString: @"/statuses/update.json"];
+    NSMutableDictionary *params = [NSMutableDictionary dictionary];
+    [params setValue:@"true" forKey:@"trim_user"];
     if (isDM) {
-        url = @"https://api.twitter.com/1/direct_messages/new.xml";
-        params = [NSMutableDictionary dictionaryWithObjectsAndKeys:tweet, @"text", nil];
+        url = [API_URL stringByAppendingString: @"/direct_messages/new.json"]; 
+        [params setValue:tweet forKey:@"text"];
         NSString *name = [self.previewTweet valueForKeyPath:@"user.screen_name"];
         [params setValue:name forKey:@"screen_name"];
     }
     else if ([tweet isEqualToString:RT_IDENTIFIER_TEXT]) {
         if (NSString *id = [self.previewTweet objectForKey:@"id_str"]) {
-            params = [NSMutableDictionary dictionary];
-            url = [NSString stringWithFormat:@"https://api.twitter.com/1/statuses/retweet/%@.xml", id];
+            [params setValue:id forKey:@"id"];
+            url = [API_URL stringByAppendingFormat:@"/statuses/retweet/%@.json", id]; 
         }
     }
     else {
         params = [NSMutableDictionary dictionaryWithObjectsAndKeys:tweet, @"status", nil];
+        [params setValue:tweet forKey:@"status"];
         if (NSString *id = [self.previewTweet objectForKey:@"id_str"])
             [params setValue:id forKey:@"in_reply_to_status_id"];
-
     }
 
     NSMutableArray *paramArray = [NSMutableArray arrayWithCapacity:params.count];
@@ -867,6 +870,7 @@ static int const TYPE_SEARCH = 3;
 
     NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:url]];
     [request setHTTPMethod:@"POST"];
+    [request setValue:@"application/x-www-form-urlencoded" forHTTPHeaderField:@"Content-Type"];
     NSData *body = [qs dataUsingEncoding:NSUTF8StringEncoding];
 
     TwitterAuth *auth = [[[TwitterAuth alloc] init] autorelease];
@@ -1498,12 +1502,12 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
 }
 - (NSMutableArray*)reloadSection: (int) sectionNumber force: (BOOL) force maxId: (NSString *)maxId{
     
-    NSString *sectionURL = @"https://api.twitter.com/statuses/home_timeline.json";
+    NSString *sectionURL = [API_URL stringByAppendingString:@"/statuses/home_timeline.json"];
     int count = 5;
     if (NSNumber *n = [self.plugin.preferences objectForKey:@"MaxTweets"])
         count = n.intValue;
     NSString *sinceId = @"-1"; 
-    
+
     NSMutableArray *fetchedTweets = [NSMutableArray array];
     NSMutableDictionary *params = [NSMutableDictionary dictionaryWithObjectsAndKeys:[NSString stringWithFormat:@"%d", count], @"count", nil];
     [params setObject:@"0" forKey:@"include_entities"];
@@ -1512,18 +1516,18 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
     NSMutableArray *targetStorage = self.timeline;
     switch (sectionNumber) {
         case 1:
-            sectionURL = @"https://api.twitter.com/statuses/mentions.json";
+            sectionURL = [API_URL stringByAppendingString:@"/statuses/mentions_timeline.json"];
             targetStorage = self.mentions;
             NSLog(@"LI:Twitter: Loading MENTIONS...");
             break;
         case 2:
-            sectionURL = @"https://api.twitter.com/1/direct_messages.json";
+            sectionURL = [API_URL stringByAppendingString:@"/direct_messages.json"];
             targetStorage = self.directMessages;
             NSLog(@"LI:Twitter: Loading DIRECT_MESSAGES...");
             break;
         default:
         case 0:
-            sectionURL = @"https://api.twitter.com/statuses/home_timeline.json";
+            sectionURL = [API_URL stringByAppendingString:@"/statuses/home_timeline.json"];
             targetStorage = self.timeline;
             NSLog(@"LI:Twitter: Loading TIMELINE...");
             break;
