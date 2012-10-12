@@ -470,6 +470,7 @@ static NSString *const API_URL = @"https://api.twitter.com/1.1";
 @property(retain) NSMutableDictionary *currentTweet;
 @property(retain) NSMutableString *xml;
 @property(retain) NSString *type;
+@property(retain) NSString *selfScreenName;
 @property(retain) NSArray *toolbarButtons;
 @property(nonatomic, retain) UIButton *loadMoreButton;
 @property(nonatomic, retain) UIActivityIndicatorView *loadingIndicator;
@@ -492,7 +493,7 @@ static NSString *const API_URL = @"https://api.twitter.com/1.1";
 
 @implementation TwitterPlugin
 
-@synthesize tweets, timeline, mentions, directMessages, tempTweets, xml, plugin, imageCache, type, currentTweet, previewController, countLabel;
+@synthesize tweets, timeline, mentions, directMessages, tempTweets, xml, plugin, imageCache, type, currentTweet, previewController, countLabel, selfScreenName;
 
 @synthesize previewTweet, previewTextView, newTweetView, webView, editView, readView, activity, toolbarButtons, tabbar, loadMoreButton, loadingIndicator;
 
@@ -836,7 +837,27 @@ static NSString *const API_URL = @"https://api.twitter.com/1.1";
     [self performSelectorInBackground:@selector(sendTweetInBackground:) withObject:tweet];
 }
 
-
+- (void)detectSelfScreenName {
+    if(self.selfScreenName == nil){
+        NSString *url = [API_URL stringByAppendingString: @"/account/verify_credentials.json"];     
+        NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:url]];
+        request.HTTPMethod = @"GET";
+        TwitterAuth *auth = [[[TwitterAuth alloc] init] autorelease];
+        if (!auth.authorized) {
+            NSLog(@"LI:Twitter: Twitter client is not authorized!");
+            return;
+        }
+        NSString *header = [auth OAuthorizationHeader:request.URL method:@"GET" body:nil];
+        [request setValue:header forHTTPHeaderField:@"Authorization"];
+        NSError *anError = nil;
+        NSData *data = [NSURLConnection sendSynchronousRequest:request returningResponse:NULL error:&anError];
+        NSMutableDictionary *userData = [data mutableObjectFromJSONData];
+        if (userData != nil && userData.count > 0) {
+            self.selfScreenName = [userData objectForKey:@"screen_name"];
+        }
+    }
+    NSLog(@"Detected Screen Name: %@", self.selfScreenName);
+}
 - (void)sendTweetInBackground:(NSString *)tweet {
     NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
 
@@ -943,7 +964,9 @@ static NSString *const API_URL = @"https://api.twitter.com/1.1";
     replyText = @"";
     for (unsigned int i = 0; i < [words count]; i++) {
         NSString *token = [[words objectAtIndex:i] stringByAppendingString:@" "];
-        if ([token hasPrefix:@"@"] && [replyText rangeOfString:token options:NSCaseInsensitiveSearch].location == NSNotFound) {
+        if ([token hasPrefix:@"@"] && [replyText rangeOfString:token options:NSCaseInsensitiveSearch].location == NSNotFound
+            && ![token isEqualToString:[NSString stringWithFormat:@"@%@ ", self.selfScreenName]]
+            ) {
             replyText = [replyText stringByAppendingString:token];
         }
     }
@@ -1435,7 +1458,7 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
     navbar.barStyle = UIBarStyleBlackOpaque;
     UIToolbar *toolbar = [self.previewController toolbar];
     toolbar.barStyle = UIBarStyleBlackOpaque;
-
+    [self detectSelfScreenName];
     return self;
 }
 
