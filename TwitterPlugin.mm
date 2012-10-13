@@ -451,7 +451,7 @@ static NSString *const API_URL = @"https://api.twitter.com/1.1";
 
 #define UIColorFromRGBA(rgbValue, alphaValue) [UIColor colorWithRed:((float)((rgbValue & 0xFF0000) >> 16))/255.0 green:((float)((rgbValue & 0xFF00) >> 8))/255.0 blue:((float)(rgbValue & 0xFF))/255.0 alpha:alphaValue]
 
-@interface TwitterPlugin : UIViewController <LIPluginController, LITableViewDelegate, UITableViewDataSource, UITextViewDelegate, LIPreviewDelegate, UIWebViewDelegate> {
+@interface TwitterPlugin : UIViewController <LIPluginController, LITableViewDelegate, UITableViewDataSource, UITextViewDelegate, LIPreviewDelegate, UIWebViewDelegate, UITweetsTabBarDelegate> {
     NSTimeInterval nextUpdate;
     NSDateFormatter *formatter;
     NSConditionLock *lock;
@@ -486,6 +486,7 @@ static NSString *const API_URL = @"https://api.twitter.com/1.1";
 @property(nonatomic, retain) UIView *editView;
 @property(nonatomic, retain) UITweetsTabBar *tabbar;
 @property(nonatomic, retain) UIView *readView;
+@property(nonatomic, retain) UIToolbar *keyboardToolbar;
 @property(nonatomic, retain) UIActivityIndicatorView *activity;
 
 
@@ -493,7 +494,7 @@ static NSString *const API_URL = @"https://api.twitter.com/1.1";
 
 @implementation TwitterPlugin
 
-@synthesize tweets, timeline, mentions, directMessages, tempTweets, xml, plugin, imageCache, type, currentTweet, previewController, countLabel, selfScreenName;
+@synthesize tweets, timeline, mentions, directMessages, tempTweets, xml, plugin, imageCache, type, currentTweet, previewController, countLabel, selfScreenName, keyboardToolbar;
 
 @synthesize previewTweet, previewTextView, newTweetView, webView, editView, readView, activity, toolbarButtons, tabbar, loadMoreButton, loadingIndicator;
 
@@ -710,9 +711,25 @@ static NSString *const API_URL = @"https://api.twitter.com/1.1";
 
 }
 
+- (void)atPressed: (id)sender {
+    NSRange range = self.previewTextView.selectedRange;  
+    self.previewTextView.scrollEnabled = NO;
+    self.previewTextView.text = [self.previewTextView.text stringByReplacingCharactersInRange:range withString:@"@"];
+    range.location+=1;
+    self.previewTextView.selectedRange = range;
+    
+}
+- (void)hashPressed: (id)sender {
+    NSRange range = self.previewTextView.selectedRange;  
+    self.previewTextView.scrollEnabled = NO;
+    self.previewTextView.text = [self.previewTextView.text stringByReplacingCharactersInRange:range withString:@"#"];
+    range.location+=1;
+    self.previewTextView.selectedRange = range;
+}
 - (void)loadView {
 
     UIView *v = [[[UIView alloc] initWithFrame:[[UIScreen mainScreen] applicationFrame]] autorelease];
+
     v.backgroundColor = [UIColor blackColor];
 
     UIView *eView = [[[UIView alloc] initWithFrame:v.bounds] autorelease];
@@ -729,12 +746,60 @@ static NSString *const API_URL = @"https://api.twitter.com/1.1";
     [eView addSubview:tv];
     self.previewTextView = tv;
 
-    UILabel *countLbl = [[[UILabel alloc] initWithFrame:CGRectMake(v.frame.size.width - 60, v.frame.size.height - [UIKeyboard defaultSize].height - 80, 60, 30)] autorelease];
+    keyboardToolbar = [UIToolbar new];
+    keyboardToolbar.barStyle = UIBarStyleBlackOpaque;
+    [keyboardToolbar sizeToFit];
+    keyboardToolbar.frame = CGRectMake(0, 0, v.frame.size.width, 35);
+    [eView addSubview:keyboardToolbar]; 
+
+    NSMutableArray *items = [[NSMutableArray alloc] init];
+
+    UIButton *atButton  = [[UIButton buttonWithType:UIButtonTypeCustom] autorelease];
+    atButton.frame = CGRectMake(0, 0, 35, 30);
+    [atButton setTitle:@"@" forState:UIControlStateNormal];
+    [atButton setTitleColor:[UIColor blackColor] forState:(UIControlStateNormal)];
+    atButton.titleLabel.font = [UIFont boldSystemFontOfSize:24];
+    [atButton.layer setCornerRadius:4.0f];
+    [atButton.layer setBorderWidth:1.0f];
+    [atButton.layer setBackgroundColor:[[UIColor whiteColor] CGColor]];
+    [atButton.layer setBackgroundColor:[[UIColor whiteColor] CGColor]];
+    [atButton addTarget:self action:@selector(atPressed:) forControlEvents:UIControlEventTouchUpInside];
+    
+
+    UIButton *hashButton  = [[UIButton buttonWithType:UIButtonTypeCustom] autorelease];
+    hashButton.frame = CGRectMake(0, 0, 35, 30);
+    [hashButton setTitle:@"#" forState:UIControlStateNormal];
+    [hashButton setTitleColor:[UIColor blackColor] forState:(UIControlStateNormal)];
+    hashButton.titleLabel.font = [UIFont boldSystemFontOfSize:24];
+    [hashButton.layer setCornerRadius:4.0f];
+    [hashButton.layer setBorderWidth:1.0f];
+    [hashButton.layer setBackgroundColor:[[UIColor whiteColor] CGColor]];
+    [hashButton addTarget:self action:@selector(hashPressed:) forControlEvents:UIControlEventTouchUpInside];
+    
+    
+    UIBarButtonItem *atButtonItem = [[UIBarButtonItem alloc] initWithCustomView:atButton];
+    [items addObject:atButtonItem];
+    
+    UIBarButtonItem *hashButtonItem = [[UIBarButtonItem alloc] initWithCustomView:hashButton];
+    [items addObject:hashButtonItem];
+    
+    UILabel *countLbl = [[[UILabel alloc] initWithFrame:CGRectMake(v.frame.size.width - 60, 5, 60, 30)] autorelease];
     countLbl.backgroundColor = [UIColor clearColor];
     countLbl.font = [UIFont boldSystemFontOfSize:24];
     countLbl.textColor = [UIColor whiteColor];
     countLbl.textAlignment = UITextAlignmentCenter;
-    [eView addSubview:countLbl];
+    
+    UIBarButtonItem *countItem = [[UIBarButtonItem alloc] initWithCustomView:countLbl];
+    UIBarButtonItem *flexspace = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil];
+    [items addObject:flexspace];
+    [items addObject:countItem];
+
+    [self.previewTextView setInputAccessoryView:self.keyboardToolbar];
+    
+    [keyboardToolbar setItems:items animated:NO];
+    [items release];
+    [keyboardToolbar release];
+
     self.countLabel = countLbl;
 
     UIView *rView = [[[UIView alloc] initWithFrame:v.bounds] autorelease];
