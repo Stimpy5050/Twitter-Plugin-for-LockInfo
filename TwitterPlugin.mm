@@ -688,7 +688,21 @@ static NSString *const API_URL = @"https://api.twitter.com/1.1";
         } else {
             rtscreenName = @"";
         }
-        NSString *html = [NSString stringWithFormat:@"<html><head><style>div{padding:10px;}#time{font-size:small;color:gray;}a{text-decoration:none;color:#3579db;font-weight:bold;}body{font:18px 'Helvetica Neue',Helvetica,sans-serif;}</style></head><body><div id='tweet'>%@</div><div id='time'>%@ &#9679; %@ <br/> %@</div></body></html>", [self parseTweetText:tweetText], source, date, rtscreenName];
+        
+        tweetText = [self parseTweetText:tweetText];
+        
+        NSArray *urls = [tweet valueForKeyPath:@"entities.urls"];
+        if(urls != nil && urls.count > 0){
+            for (NSDictionary* urlInfo in urls){
+                NSString *href = [urlInfo valueForKey:@"url"];
+                NSString *displayName = [urlInfo valueForKey:@"display_url"];
+                displayName = displayName != nil ? displayName : href;
+                tweetText = [tweetText stringByReplacingOccurrencesOfString:href withString:[NSString stringWithFormat:@"<a href='%@'>%@</a>", href, displayName]];
+            }
+        }
+        
+        NSString *html = [NSString stringWithFormat:@"<html><head><style>div{padding:10px;}#time{font-size:small;color:gray;}a{text-decoration:none;color:#3579db;font-weight:bold;}body{font:18px 'Helvetica Neue',Helvetica,sans-serif;}</style></head><body><div id='tweet'>%@</div><div id='time'>%@ &#9679; %@ <br/> %@</div></body></html>",tweetText , source, date, rtscreenName];
+        
         [self.webView loadHTMLString:html baseURL:[NSURL URLWithString:@""]];
     }
 
@@ -1598,7 +1612,7 @@ static void activeCallStateChanged(CFNotificationCenterRef center, void *observe
 
     NSMutableArray *fetchedTweets = [NSMutableArray array];
     NSMutableDictionary *params = [NSMutableDictionary dictionaryWithObjectsAndKeys:[NSString stringWithFormat:@"%d", count], @"count", nil];
-    [params setObject:@"0" forKey:@"include_entities"];
+    [params setObject:@"1" forKey:@"include_entities"];
     [params setObject:@"0" forKey:@"contributor_details"];
     
     NSMutableArray *targetStorage = self.timeline;
